@@ -287,28 +287,23 @@
       </section>
 
       <section id="projectsView" class="view">
-        <section class="panel">
+        <section class="project-command">
+          <div>
+            <span>Danh mục Master</span>
+            <strong id="projectCommandTotal">0 dự án đang theo dõi</strong>
+          </div>
+          <div>
+            <button class="secondary-btn" data-jump="importView" type="button">Nhập từ file</button>
+            <button id="addProjectBtn" class="primary-btn">Thêm dự án</button>
+          </div>
+        </section>
+
+        <section class="project-list-panel">
           <div class="panel-head">
             <h2>Danh mục dự án</h2>
-            <button id="addProjectBtn" class="primary-btn">Thêm dòng</button>
+            <span>Chỉnh sửa nhanh các thông tin phục vụ báo cáo</span>
           </div>
-          <div class="table-wrap">
-            <table class="data-table editable-table">
-              <thead>
-                <tr>
-                  <th>STT</th>
-                  <th>Tên dự án</th>
-                  <th>TMĐT</th>
-                  <th>Kế hoạch</th>
-                  <th>Tiến độ</th>
-                  <th>Khó khăn</th>
-                  <th>Đánh giá</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="projectRows"></tbody>
-            </table>
-          </div>
+          <div id="projectRows" class="project-card-list"></div>
         </section>
       </section>
 

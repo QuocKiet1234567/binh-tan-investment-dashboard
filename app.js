@@ -64,7 +64,7 @@ function cacheElements() {
     "reportText", "docStatus", "presentationNotes", "capitalRows", "capitalTotalPlan",
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
-    "settingsExportExcelBtn", "settingsClearBtn"
+    "settingsExportExcelBtn", "settingsClearBtn", "projectCommandTotal"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -493,18 +493,49 @@ function renderProjectsTable() {
     return !keyword || content.includes(keyword);
   });
 
-  els.projectRows.innerHTML = rows.length ? rows.map((project) => `
-    <tr data-index="${project.stt - 1}">
-      <td>${project.stt}</td>
-      <td><textarea data-field="name">${escapeHtml(project.name)}</textarea></td>
-      <td><input data-field="budget" type="number" step="0.001" value="${project.budget || 0}"></td>
-      <td><input data-field="plan" type="number" step="0.001" value="${project.plan || 0}"></td>
-      <td><textarea data-field="progress">${escapeHtml(project.progress)}</textarea></td>
-      <td><textarea data-field="difficulty">${escapeHtml(project.difficulty)}</textarea></td>
-      <td><textarea data-field="evaluation">${escapeHtml(project.evaluation || project.status)}</textarea></td>
-      <td><button class="row-delete" data-delete="${project.stt - 1}">Xóa</button></td>
-    </tr>
-  `).join("") : `<tr><td colspan="8">Chưa có dữ liệu dự án.</td></tr>`;
+  els.projectCommandTotal.textContent = `${state.projects.length} dự án đang theo dõi`;
+
+  els.projectRows.innerHTML = rows.length ? rows.map((project) => {
+    const rate = deriveProjectRate(project);
+    return `
+      <article class="project-card" data-index="${project.stt - 1}">
+        <div class="project-card-main">
+          <div class="project-index">${String(project.stt).padStart(2, "0")}</div>
+          <div class="project-info">
+            <div class="project-title-row">
+              <textarea class="project-name-field" data-field="name">${escapeHtml(project.name)}</textarea>
+              <span class="project-status ${statusClass(project.status)}">${escapeHtml(project.status || "Đang cập nhật")}</span>
+            </div>
+            <div class="project-meta">
+              <span>TMĐT: <strong>${formatNumber(project.budget)} tỷ</strong></span>
+              <span>Kế hoạch: <strong>${formatNumber(project.plan)} tỷ</strong></span>
+              <span>Giải ngân/tiến độ: <strong>${rate}%</strong></span>
+            </div>
+            <div class="project-progress"><span style="width:${rate}%"></span></div>
+          </div>
+          <button class="row-delete" data-delete="${project.stt - 1}" title="Xóa dự án">Xóa</button>
+        </div>
+
+        <div class="project-edit-grid">
+          <label>TMĐT
+            <input data-field="budget" type="number" step="0.001" value="${project.budget || 0}">
+          </label>
+          <label>Kế hoạch vốn
+            <input data-field="plan" type="number" step="0.001" value="${project.plan || 0}">
+          </label>
+          <label>Tiến độ hiện nay
+            <textarea data-field="progress">${escapeHtml(project.progress)}</textarea>
+          </label>
+          <label>Khó khăn, vướng mắc
+            <textarea data-field="difficulty">${escapeHtml(project.difficulty)}</textarea>
+          </label>
+          <label>Đánh giá
+            <textarea data-field="evaluation">${escapeHtml(project.evaluation || project.status)}</textarea>
+          </label>
+        </div>
+      </article>
+    `;
+  }).join("") : `<div class="empty-state">Chưa có dữ liệu dự án. Hãy upload phụ lục Excel hoặc thêm dự án mới.</div>`;
 
   els.projectRows.querySelectorAll("[data-field]").forEach((input) => {
     input.addEventListener("change", handleProjectEdit);
@@ -515,7 +546,7 @@ function renderProjectsTable() {
 }
 
 function handleProjectEdit(event) {
-  const row = event.target.closest("tr");
+  const row = event.target.closest("[data-index]");
   const index = Number(row.dataset.index);
   const field = event.target.dataset.field;
   const value = ["budget", "plan"].includes(field) ? toNumber(event.target.value) : event.target.value;
@@ -782,6 +813,21 @@ function toNumber(value) {
 
 function formatNumber(value) {
   return toNumber(value).toLocaleString("vi-VN", { maximumFractionDigits: 3 });
+}
+
+function deriveProjectRate(project) {
+  const text = normalizeText([project.progress, project.disbursement, project.evaluation, project.status].join(" "));
+  if (text.includes("100") || text.includes("dam bao") || text.includes("hoan thanh")) return 90;
+  if (text.includes("cham") || text.includes("tam dung") || text.includes("khong bao dam")) return 35;
+  if (text.includes("phe duyet") || text.includes("dang")) return 65;
+  return 50;
+}
+
+function statusClass(status) {
+  const text = normalizeText(status);
+  if (text.includes("cham") || text.includes("xu ly")) return "is-risk";
+  if (text.includes("hoan thanh") || text.includes("dam bao")) return "is-good";
+  return "is-active";
 }
 
 function shortProjectName(value) {
