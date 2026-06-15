@@ -65,7 +65,7 @@ function cacheElements() {
     "reportText", "docStatus", "presentationNotes", "capitalRows", "capitalTotalPlan",
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
-    "settingsExportExcelBtn", "settingsClearBtn", "projectCommandTotal"
+    "settingsExportExcelBtn", "settingsClearBtn"
     , "projectStatusFilter", "projectGroupFilter", "backToProjectsBtn", "detailCode",
     "detailGroup", "detailName", "detailMeta", "detailBudget", "detailStatus",
     "detailLegal", "detailProgressDoc", "detailPlan", "detailDisbursed",
@@ -545,8 +545,6 @@ function renderProjectsTable() {
       && (groupFilter === "all" || groupFilter === group);
   });
 
-  els.projectCommandTotal.textContent = `${state.projects.length} dự án đang theo dõi`;
-
   els.projectRows.innerHTML = rows.length ? rows.map((project) => {
     const constructionRate = deriveProjectRate(project);
     const disbRate = deriveDisbursementRate(project);
@@ -572,7 +570,16 @@ function renderProjectsTable() {
         <td><button class="detail-action" data-detail="${project.stt - 1}" type="button">Chi tiết</button></td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="8"><div class="empty-state">Chưa có dữ liệu dự án phù hợp.</div></td></tr>`;
+  }).join("") : `
+    <tr>
+      <td colspan="8">
+        <div class="empty-state">
+          <strong>Chưa có dữ liệu dự án</strong>
+          <span>Vào mục Nhập & phân tích file để upload Excel phụ lục, hoặc bấm Tạo dự án mới.</span>
+        </div>
+      </td>
+    </tr>
+  `;
 
   els.projectRows.querySelectorAll("[data-detail]").forEach((button) => {
     button.addEventListener("click", () => openProjectDetail(Number(button.dataset.detail)));

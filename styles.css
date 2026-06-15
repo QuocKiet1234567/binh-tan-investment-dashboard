@@ -1408,6 +1408,23 @@ textarea:focus {
   font-weight: 800;
 }
 
+.empty-state strong,
+.empty-state span {
+  display: block;
+}
+
+.empty-state strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.empty-state span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .report-text {
   width: 100%;
 }
