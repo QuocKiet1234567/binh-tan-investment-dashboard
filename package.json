@@ -1,0 +1,14 @@
+{
+  "name": "binh-tan-investment-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev",
+    "deploy": "vercel --prod",
+    "preview": "vercel"
+  },
+  "devDependencies": {
+    "vercel": "latest"
+  }
+}

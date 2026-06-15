@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ban Quản Lý Dự Án Phường Bình Tân</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <div class="login-info">
+      <div class="brand-row">
+        <div class="brand-mark">BT</div>
+        <div>
+          <div class="brand-name">Ban Quản Lý Dự Án Phường Bình Tân</div>
+          <div class="brand-sub">Cổng báo cáo đầu tư công</div>
+        </div>
+      </div>
+
+      <div class="login-copy">
+        <div class="eyebrow">Hệ thống phục vụ báo cáo HĐND</div>
+        <h1>Phân tích hồ sơ, lập dashboard và xuất báo cáo điều hành</h1>
+        <p>Upload phụ lục Excel hoặc báo cáo Word, hệ thống tự trích xuất danh mục dự án, vốn, tiến độ, pháp lý, khó khăn và cảnh báo để phục vụ báo cáo cấp trên.</p>
+      </div>
+
+      <div class="unit-card">
+        <div>
+          <span>Đơn vị sử dụng</span>
+          <strong>Ban Quản Lý Dự Án Phường Bình Tân</strong>
+        </div>
+        <em>Kỳ báo cáo 2026</em>
+      </div>
+
+      <div class="login-features">
+        <div>
+          <strong>01</strong>
+          <span>Upload Word / Excel / Google Sheet</span>
+        </div>
+        <div>
+          <strong>02</strong>
+          <span>Tự phân tích thành dashboard</span>
+        </div>
+        <div>
+          <strong>03</strong>
+          <span>Xuất Word / Excel báo cáo</span>
+        </div>
+      </div>
+    </div>
+
+    <form id="loginForm" class="login-card">
+      <div class="form-head">
+        <span>Đăng nhập hệ thống</span>
+        <h2>Quản lý đầu tư công</h2>
+        <p>Nhập tài khoản để vào hệ thống báo cáo. Bản demo cho phép đăng nhập bằng thông tin bất kỳ.</p>
+      </div>
+
+      <label>
+        Tài khoản / Email
+        <input id="loginUser" type="text" placeholder="vd: admin@binhtan.gov.vn" autocomplete="username">
+      </label>
+      <label>
+        Mật khẩu
+        <input id="loginPass" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password">
+      </label>
+      <div class="form-options">
+        <label class="check-line"><input id="rememberMe" type="checkbox"> Ghi nhớ phiên</label>
+        <span>Nội bộ</span>
+      </div>
+      <div id="loginError" class="error-text"></div>
+      <button class="primary-btn" type="submit">Đăng nhập</button>
+    </form>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div>
+        <div class="brand-row compact">
+          <div class="brand-mark">BT</div>
+          <div>
+            <div class="brand-name">QLDA Bình Tân</div>
+            <div class="brand-sub">Báo cáo đầu tư công</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-view="dashboardView">
+            <span class="icon">▦</span> Tổng quan
+          </button>
+          <button class="nav-item" data-view="importView">
+            <span class="icon">⇧</span> Nhập dữ liệu
+          </button>
+          <button class="nav-item" data-view="projectsView">
+            <span class="icon">≡</span> Danh mục dự án
+          </button>
+          <button class="nav-item" data-view="reportView">
+            <span class="icon">▤</span> Báo cáo trình bày
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-footer">
+        <div>Ban Quản Lý Dự Án<br>Phường Bình Tân</div>
+        <button id="logoutBtn" class="ghost-btn">Đăng xuất</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Tổng quan báo cáo</h1>
+          <p id="pageSub">Dữ liệu được phân tích từ file Word/Excel hoặc nhập trực tiếp trên web.</p>
+        </div>
+        <div class="top-actions">
+          <input id="searchInput" type="search" placeholder="Tìm dự án, pháp lý, khó khăn...">
+          <button id="exportExcelBtn" class="secondary-btn">Xuất Excel</button>
+          <button id="exportWordBtn" class="primary-btn">Xuất Word</button>
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active">
+        <div class="notice">
+          <div>
+            <strong>Báo cáo tiến độ các dự án đầu tư công</strong>
+            <span id="sourceSummary">Chưa có file phân tích. Upload Excel/Word để bắt đầu.</span>
+          </div>
+          <button class="secondary-btn" data-jump="importView">Upload file</button>
+        </div>
+
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <span>Tổng dự án</span>
+            <strong id="kpiProjects">0</strong>
+            <em>Danh mục đang theo dõi</em>
+          </article>
+          <article class="kpi-card">
+            <span>Tổng mức đầu tư</span>
+            <strong id="kpiBudget">0</strong>
+            <em>Đơn vị: tỷ đồng</em>
+          </article>
+          <article class="kpi-card">
+            <span>Kế hoạch vốn</span>
+            <strong id="kpiPlan">0</strong>
+            <em>Năm báo cáo</em>
+          </article>
+          <article class="kpi-card danger">
+            <span>Cảnh báo</span>
+            <strong id="kpiAlerts">0</strong>
+            <em>Dự án cần xử lý</em>
+          </article>
+        </div>
+
+        <div class="chart-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Phân loại trạng thái</h2>
+              <span>Tự tính từ đánh giá dự án</span>
+            </div>
+            <div class="chart-box"><canvas id="statusChart"></canvas></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Top dự án theo tổng mức đầu tư</h2>
+              <span>Đơn vị: tỷ đồng</span>
+            </div>
+            <div class="chart-box"><canvas id="budgetChart"></canvas></div>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Cảnh báo cần báo cáo cấp trên</h2>
+            <span>Rút từ pháp lý, tiến độ, khả năng giải ngân và khó khăn</span>
+          </div>
+          <div id="alertList" class="alert-list"></div>
+        </section>
+      </section>
+
+      <section id="importView" class="view">
+        <div class="import-grid">
+          <section class="upload-card" id="dropZone">
+            <div class="upload-icon">⇧</div>
+            <h2>Tải file báo cáo</h2>
+            <p>Hỗ trợ `.xlsx` phụ lục dự án và `.docx` báo cáo thuyết minh. Có thể chọn nhiều file cùng lúc.</p>
+            <input id="fileInput" type="file" multiple accept=".xlsx,.xls,.docx">
+            <button id="chooseFileBtn" class="primary-btn" type="button">Chọn file</button>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Kết quả phân tích</h2>
+              <span id="analysisStatus">Chưa có dữ liệu</span>
+            </div>
+            <div id="analysisLog" class="analysis-log"></div>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Preview dữ liệu sau khi đọc file</h2>
+            <button id="clearDataBtn" class="secondary-btn">Xóa dữ liệu</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Tên dự án</th>
+                  <th>TMĐT</th>
+                  <th>Kế hoạch vốn</th>
+                  <th>Pháp lý</th>
+                  <th>Tiến độ</th>
+                  <th>Đánh giá</th>
+                </tr>
+              </thead>
+              <tbody id="previewRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="projectsView" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Danh mục dự án</h2>
+            <button id="addProjectBtn" class="primary-btn">Thêm dòng</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table editable-table">
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Tên dự án</th>
+                  <th>TMĐT</th>
+                  <th>Kế hoạch</th>
+                  <th>Tiến độ</th>
+                  <th>Khó khăn</th>
+                  <th>Đánh giá</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="projectRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="reportView" class="view">
+        <div class="report-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nội dung thuyết minh từ Word</h2>
+              <span id="docStatus">Chưa upload Word</span>
+            </div>
+            <textarea id="reportText" class="report-text" placeholder="Nội dung báo cáo Word sẽ hiển thị tại đây. Có thể chỉnh sửa trước khi xuất."></textarea>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Dàn ý trình bày nhanh</h2>
+              <span>Tự sinh từ dữ liệu dự án</span>
+            </div>
+            <div id="presentationNotes" class="presentation-notes"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
