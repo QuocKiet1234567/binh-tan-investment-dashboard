@@ -406,9 +406,9 @@ textarea:focus {
 }
 
 .nav {
-  margin-top: 38px;
+  margin-top: 34px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .nav-item {
@@ -418,11 +418,11 @@ textarea:focus {
   gap: 12px;
   border: 0;
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 10px 11px;
   color: #cbd5e1;
   background: transparent;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.2;
   font-weight: 900;
   white-space: nowrap;
@@ -445,8 +445,8 @@ textarea:focus {
 }
 
 .icon {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   display: grid;
   place-items: center;
@@ -456,8 +456,8 @@ textarea:focus {
 }
 
 .icon svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   stroke-width: 2.2;
 }
 
@@ -530,6 +530,44 @@ textarea:focus {
 
 .view.active {
   display: block;
+}
+
+.module-intro {
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(15,23,42,.035);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.module-intro span {
+  display: block;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.module-intro strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.module-intro em {
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .notice,

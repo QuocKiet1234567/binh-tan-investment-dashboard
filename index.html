@@ -124,6 +124,16 @@
             </span>
             Tổng quan hệ thống
           </button>
+          <button class="nav-item" data-view="importView">
+            <span class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 3v12"></path>
+                <path d="m7 8 5-5 5 5"></path>
+                <path d="M5 15v4h14v-4"></path>
+              </svg>
+            </span>
+            Nhập & phân tích file
+          </button>
           <button class="nav-item" data-view="projectsView">
             <span class="icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -131,7 +141,7 @@
                 <path d="M4 10h16"></path>
               </svg>
             </span>
-            Danh mục dự án
+            Danh mục dự án Master
           </button>
           <button class="nav-item" data-view="capitalView">
             <span class="icon">
@@ -152,7 +162,7 @@
                 <path d="M10 17h4"></path>
               </svg>
             </span>
-            Báo cáo định kỳ
+            Báo cáo & xuất file
           </button>
           <button class="nav-item" data-view="settingsView">
             <span class="icon">
@@ -161,7 +171,7 @@
                 <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.08.1a2 2 0 0 1-3.84 0L10 20a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1l-.1-.08a2 2 0 0 1 0-3.84L4 10a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6l.08-.1a2 2 0 0 1 3.84 0L14 4a1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.23.37.42.71.6 1l.1.08a2 2 0 0 1 0 3.84L20 14a1.7 1.7 0 0 0-.6 1Z"></path>
               </svg>
             </span>
-            Cấu hình hệ thống
+            Cấu hình dữ liệu
           </button>
         </nav>
       </div>
@@ -244,6 +254,13 @@
       </section>
 
       <section id="importView" class="view">
+        <div class="module-intro">
+          <div>
+            <span>Bước nhập dữ liệu</span>
+            <strong>Upload Word/Excel để hệ thống tự tạo dashboard</strong>
+          </div>
+          <em>Excel dùng cho bảng dự án, Word dùng cho phần thuyết minh báo cáo.</em>
+        </div>
         <div class="import-grid">
           <section class="upload-card" id="dropZone">
             <div class="upload-icon">⇧</div>
@@ -287,6 +304,13 @@
       </section>
 
       <section id="projectsView" class="view">
+        <div class="module-intro">
+          <div>
+            <span>Bảng quản lý chính</span>
+            <strong>Theo dõi từng dự án trước khi báo cáo</strong>
+          </div>
+          <em>Bấm Chi tiết để xem pháp lý, tài chính, gói thầu và tiến độ hiện trường.</em>
+        </div>
         <section class="master-panel">
           <div class="master-head">
             <div>
@@ -426,6 +450,13 @@
       </section>
 
       <section id="capitalView" class="view">
+        <div class="module-intro">
+          <div>
+            <span>Theo dõi vốn</span>
+            <strong>Nắm kế hoạch vốn và khả năng giải ngân</strong>
+          </div>
+          <em>Tự tổng hợp từ danh mục dự án đang có trong hệ thống.</em>
+        </div>
         <div class="notice capital-hero">
           <div>
             <strong>Kế hoạch vốn năm báo cáo</strong>
@@ -476,6 +507,13 @@
       </section>
 
       <section id="periodicView" class="view">
+        <div class="module-intro">
+          <div>
+            <span>Báo cáo định kỳ</span>
+            <strong>Tổng hợp nội dung để xếp trình bày</strong>
+          </div>
+          <em>Có thể xuất Word sau khi rà soát nội dung tóm tắt và danh sách cảnh báo.</em>
+        </div>
         <div class="report-layout">
           <section class="panel">
             <div class="panel-head">
@@ -500,6 +538,13 @@
       </section>
 
       <section id="settingsView" class="view">
+        <div class="module-intro">
+          <div>
+            <span>Quản trị dữ liệu</span>
+            <strong>Kiểm tra dữ liệu đang lưu và thao tác hệ thống</strong>
+          </div>
+          <em>Dùng khi cần xóa dữ liệu cũ, nhập lại file hoặc xuất dữ liệu gốc.</em>
+        </div>
         <div class="settings-grid">
           <section class="panel">
             <div class="panel-head">

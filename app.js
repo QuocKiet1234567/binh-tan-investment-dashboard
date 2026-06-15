@@ -189,13 +189,13 @@ function switchView(viewId) {
 
   const titleMap = {
     dashboardView: ["Bảng điều khiển tổng quan", ""],
-    importView: ["Nhập dữ liệu", "Upload Word/Excel để hệ thống tự phân tích."],
-    projectsView: ["Danh mục dự án", "Chỉnh sửa dữ liệu trước khi xuất báo cáo."],
+    importView: ["Nhập & phân tích file", "Đọc Excel phụ lục và Word thuyết minh để tạo dữ liệu báo cáo."],
+    projectsView: ["Danh mục dự án Master", "Bảng quản lý chính của toàn bộ dự án."],
     reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."],
     projectDetailView: ["Chi tiết hồ sơ dự án", ""],
     capitalView: ["Kế hoạch vốn", "Theo dõi kế hoạch vốn, giải ngân và điều chỉnh trong kỳ."],
-    periodicView: ["Báo cáo định kỳ", "Tổng hợp nội dung phục vụ họp và báo cáo cấp trên."],
-    settingsView: ["Cấu hình hệ thống", "Quản trị dữ liệu, phiên làm việc và thao tác hệ thống."]
+    periodicView: ["Báo cáo & xuất file", "Tổng hợp nội dung phục vụ họp và báo cáo cấp trên."],
+    settingsView: ["Cấu hình dữ liệu", "Quản trị dữ liệu, phiên làm việc và thao tác hệ thống."]
   };
   const [title, sub] = titleMap[viewId] || titleMap.dashboardView;
   els.pageTitle.textContent = title;
