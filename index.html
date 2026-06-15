@@ -14,7 +14,7 @@
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
-    <div class="login-info">
+    <div class="login-info login-hero">
       <div class="brand-row">
         <div class="brand-mark">BT</div>
         <div>
@@ -75,29 +75,31 @@
       </div>
     </div>
 
-    <form id="loginForm" class="login-card">
-      <div class="form-head">
-        <span>Đăng nhập hệ thống</span>
-        <h2>Quản lý đầu tư công</h2>
-        <strong>Ban Quản Lý Dự Án Phường Bình Tân</strong>
-        <p>Đăng nhập bằng tài khoản được cấp để truy cập dashboard, danh mục dự án và báo cáo điều hành.</p>
-      </div>
+    <div class="login-card-wrap">
+      <form id="loginForm" class="login-card">
+        <div class="form-head">
+          <span>Đăng nhập hệ thống</span>
+          <h2>Quản lý đầu tư công</h2>
+          <strong>Ban Quản Lý Dự Án Phường Bình Tân</strong>
+          <p>Đăng nhập bằng tài khoản được cấp để truy cập dashboard, danh mục dự án và báo cáo điều hành.</p>
+        </div>
 
-      <label>
-        Tài khoản / Email
-        <input id="loginUser" type="text" placeholder="vd: admin@binhtan.gov.vn" autocomplete="username">
-      </label>
-      <label>
-        Mật khẩu
-        <input id="loginPass" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password">
-      </label>
-      <div class="form-options">
-        <label class="check-line"><input id="rememberMe" type="checkbox"> Ghi nhớ phiên</label>
-        <span>Nội bộ</span>
-      </div>
-      <div id="loginError" class="error-text"></div>
-      <button class="primary-btn" type="submit">Đăng nhập</button>
-    </form>
+        <label>
+          Tài khoản / Email
+          <input id="loginUser" type="text" placeholder="vd: admin@binhtan.gov.vn" autocomplete="username">
+        </label>
+        <label>
+          Mật khẩu
+          <input id="loginPass" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password">
+        </label>
+        <div class="form-options">
+          <label class="check-line"><input id="rememberMe" type="checkbox"> Ghi nhớ phiên làm việc</label>
+          <span>Nội bộ</span>
+        </div>
+        <div id="loginError" class="error-text"></div>
+        <button class="primary-btn login-submit" type="submit">Đăng nhập</button>
+      </form>
+    </div>
   </section>
 
   <div id="appShell" class="app-shell hidden">
