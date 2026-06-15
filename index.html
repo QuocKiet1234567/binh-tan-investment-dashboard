@@ -287,23 +287,121 @@
       </section>
 
       <section id="projectsView" class="view">
-        <section class="project-command">
-          <div>
-            <span>Danh mục Master</span>
-            <strong id="projectCommandTotal">0 dự án đang theo dõi</strong>
+        <section class="master-panel">
+          <div class="master-head">
+            <div>
+              <h2>Danh mục dự án</h2>
+              <p>Quản lý tổng hợp vốn, giải ngân, tiến độ thi công và trạng thái điều hành.</p>
+            </div>
+            <div class="master-actions">
+              <select id="projectStatusFilter">
+                <option value="all">Tất cả trạng thái</option>
+                <option value="risk">Cần xử lý</option>
+                <option value="good">Đảm bảo tiến độ</option>
+                <option value="active">Đang triển khai</option>
+              </select>
+              <select id="projectGroupFilter">
+                <option value="all">Tất cả nhóm</option>
+                <option value="A">Nhóm A</option>
+                <option value="B">Nhóm B</option>
+                <option value="C">Nhóm C</option>
+              </select>
+              <button id="addProjectBtn" class="primary-btn">Tạo dự án mới</button>
+            </div>
           </div>
-          <div>
-            <button class="secondary-btn" data-jump="importView" type="button">Nhập từ file</button>
-            <button id="addProjectBtn" class="primary-btn">Thêm dự án</button>
+          <div class="table-wrap">
+            <table class="master-table">
+              <thead>
+                <tr>
+                  <th>Mã và tên dự án</th>
+                  <th>Nhóm</th>
+                  <th>Tổng mức đầu tư</th>
+                  <th>Kế hoạch vốn</th>
+                  <th>Giải ngân</th>
+                  <th>Thi công</th>
+                  <th>Trạng thái</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="projectRows"></tbody>
+            </table>
           </div>
         </section>
+      </section>
 
-        <section class="project-list-panel">
-          <div class="panel-head">
-            <h2>Danh mục dự án</h2>
-            <span>Chỉnh sửa nhanh các thông tin phục vụ báo cáo</span>
+      <section id="projectDetailView" class="view">
+        <button id="backToProjectsBtn" class="back-link" type="button">Quay lại danh sách</button>
+        <section class="detail-panel">
+          <div class="detail-head">
+            <div>
+              <div class="detail-badges">
+                <span id="detailCode">DA-2026-001</span>
+                <span id="detailGroup">Nhóm B</span>
+              </div>
+              <h2 id="detailName">Tên dự án</h2>
+              <p id="detailMeta">Phường Bình Tân | Chu kỳ thực hiện: 2026</p>
+            </div>
+            <div class="detail-money">
+              <span>Tổng mức đầu tư</span>
+              <strong id="detailBudget">0 VNĐ</strong>
+              <em id="detailStatus">Đang triển khai</em>
+            </div>
           </div>
-          <div id="projectRows" class="project-card-list"></div>
+
+          <div class="detail-tabs">
+            <button class="detail-tab active" data-tab="legalPane">Hồ sơ pháp lý</button>
+            <button class="detail-tab" data-tab="financePane">Tài chính và giải ngân</button>
+            <button class="detail-tab" data-tab="contractPane">Gói thầu và hợp đồng</button>
+            <button class="detail-tab" data-tab="progressPane">Tiến độ hiện trường</button>
+          </div>
+
+          <div id="legalPane" class="detail-pane active">
+            <h3>Danh mục văn bản pháp lý</h3>
+            <div class="document-list">
+              <div>
+                <strong>Quyết định phê duyệt chủ trương đầu tư</strong>
+                <span id="detailLegal">Đang cập nhật</span>
+                <button type="button">Xem PDF</button>
+              </div>
+              <div>
+                <strong>Quyết định phê duyệt dự án/dự toán</strong>
+                <span id="detailProgressDoc">Đang cập nhật</span>
+                <button type="button">Xem PDF</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="financePane" class="detail-pane">
+            <h3>Theo dõi kế hoạch vốn và giải ngân</h3>
+            <div class="finance-grid">
+              <div class="finance-card blue"><span>Kế hoạch vốn 2026</span><strong id="detailPlan">0 VNĐ</strong><em>Nguồn: Sở Kế hoạch và Đầu tư</em></div>
+              <div class="finance-card"><span>Lũy kế giải ngân</span><strong id="detailDisbursed">0 VNĐ</strong><em id="detailDisbRate">Tỷ lệ: 0%</em></div>
+              <div class="finance-card"><span>Còn lại phải giải ngân</span><strong id="detailRemaining">0 VNĐ</strong></div>
+            </div>
+          </div>
+
+          <div id="contractPane" class="detail-pane">
+            <h3>Quản lý gói thầu và hợp đồng</h3>
+            <table class="mini-table">
+              <thead><tr><th>Tên gói thầu</th><th>Nhà thầu</th><th>Giá trị hợp đồng</th><th>Trạng thái</th></tr></thead>
+              <tbody>
+                <tr><td>Gói thầu số 01: Thi công xây lắp</td><td>Đang cập nhật</td><td id="detailContractValue">0</td><td><span class="project-status is-active">Đang thực hiện</span></td></tr>
+                <tr><td>Gói thầu số 02: Tư vấn giám sát</td><td>Đang cập nhật</td><td>Đang cập nhật</td><td><span class="project-status is-active">Đang thực hiện</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="progressPane" class="detail-pane">
+            <div class="progress-layout">
+              <div>
+                <h3>Tiến độ thi công thực tế</h3>
+                <p>Khối lượng hoàn thành: <strong id="detailProgressRate">0%</strong></p>
+                <div class="project-progress large"><span id="detailProgressBar"></span></div>
+                <div class="field-note"><strong>Ghi chú hiện trường:</strong> <span id="detailDifficulty">Đang cập nhật.</span></div>
+              </div>
+              <div class="site-photos"><div>Ảnh thi công 1</div><div>Ảnh thi công 2</div></div>
+            </div>
+          </div>
         </section>
       </section>
 

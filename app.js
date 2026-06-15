@@ -5,6 +5,7 @@ const state = {
   projects: [],
   reportText: "",
   files: [],
+  selectedProjectId: null,
   charts: {
     status: null,
     budget: null
@@ -65,6 +66,11 @@ function cacheElements() {
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
     "settingsExportExcelBtn", "settingsClearBtn", "projectCommandTotal"
+    , "projectStatusFilter", "projectGroupFilter", "backToProjectsBtn", "detailCode",
+    "detailGroup", "detailName", "detailMeta", "detailBudget", "detailStatus",
+    "detailLegal", "detailProgressDoc", "detailPlan", "detailDisbursed",
+    "detailDisbRate", "detailRemaining", "detailContractValue", "detailProgressRate",
+    "detailProgressBar", "detailDifficulty"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -76,6 +82,9 @@ function bindEvents() {
   els.chooseFileBtn.addEventListener("click", () => els.fileInput.click());
   els.fileInput.addEventListener("change", (event) => handleFiles([...event.target.files]));
   els.searchInput.addEventListener("input", renderProjectsTable);
+  els.projectStatusFilter.addEventListener("change", renderProjectsTable);
+  els.projectGroupFilter.addEventListener("change", renderProjectsTable);
+  els.backToProjectsBtn.addEventListener("click", () => switchView("projectsView"));
   els.clearDataBtn.addEventListener("click", clearData);
   els.addProjectBtn.addEventListener("click", addProject);
   els.exportExcelBtn.addEventListener("click", exportCsv);
@@ -96,6 +105,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-jump]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.jump));
+  });
+
+  document.querySelectorAll(".detail-tab").forEach((button) => {
+    button.addEventListener("click", () => showDetailTab(button.dataset.tab));
   });
 
   ["dragenter", "dragover"].forEach((name) => {
@@ -172,6 +185,7 @@ function switchView(viewId) {
     importView: ["Nhập dữ liệu", "Upload Word/Excel để hệ thống tự phân tích."],
     projectsView: ["Danh mục dự án", "Chỉnh sửa dữ liệu trước khi xuất báo cáo."],
     reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."],
+    projectDetailView: ["Chi tiết hồ sơ dự án", ""],
     capitalView: ["Kế hoạch vốn", "Theo dõi kế hoạch vốn, giải ngân và điều chỉnh trong kỳ."],
     periodicView: ["Báo cáo định kỳ", "Tổng hợp nội dung phục vụ họp và báo cáo cấp trên."],
     settingsView: ["Cấu hình hệ thống", "Quản trị dữ liệu, phiên làm việc và thao tác hệ thống."]
@@ -488,60 +502,48 @@ function renderPreview() {
 
 function renderProjectsTable() {
   const keyword = normalizeText(els.searchInput.value || "");
+  const statusFilter = els.projectStatusFilter.value || "all";
+  const groupFilter = els.projectGroupFilter.value || "all";
   const rows = state.projects.filter((project) => {
     const content = normalizeText(Object.values(project).join(" "));
-    return !keyword || content.includes(keyword);
+    const status = statusClass(project.status).replace("is-", "");
+    const group = deriveProjectGroup(project);
+    return (!keyword || content.includes(keyword))
+      && (statusFilter === "all" || statusFilter === status)
+      && (groupFilter === "all" || groupFilter === group);
   });
 
   els.projectCommandTotal.textContent = `${state.projects.length} dự án đang theo dõi`;
 
   els.projectRows.innerHTML = rows.length ? rows.map((project) => {
-    const rate = deriveProjectRate(project);
+    const constructionRate = deriveProjectRate(project);
+    const disbRate = deriveDisbursementRate(project);
+    const group = deriveProjectGroup(project);
     return `
-      <article class="project-card" data-index="${project.stt - 1}">
-        <div class="project-card-main">
-          <div class="project-index">${String(project.stt).padStart(2, "0")}</div>
-          <div class="project-info">
-            <div class="project-title-row">
-              <textarea class="project-name-field" data-field="name">${escapeHtml(project.name)}</textarea>
-              <span class="project-status ${statusClass(project.status)}">${escapeHtml(project.status || "Đang cập nhật")}</span>
-            </div>
-            <div class="project-meta">
-              <span>TMĐT: <strong>${formatNumber(project.budget)} tỷ</strong></span>
-              <span>Kế hoạch: <strong>${formatNumber(project.plan)} tỷ</strong></span>
-              <span>Giải ngân/tiến độ: <strong>${rate}%</strong></span>
-            </div>
-            <div class="project-progress"><span style="width:${rate}%"></span></div>
+      <tr>
+        <td>
+          <div class="master-name">
+            <strong>${escapeHtml(project.name)}</strong>
+            <span>DA-2026-${String(project.stt).padStart(3, "0")}</span>
           </div>
-          <button class="row-delete" data-delete="${project.stt - 1}" title="Xóa dự án">Xóa</button>
-        </div>
-
-        <div class="project-edit-grid">
-          <label>TMĐT
-            <input data-field="budget" type="number" step="0.001" value="${project.budget || 0}">
-          </label>
-          <label>Kế hoạch vốn
-            <input data-field="plan" type="number" step="0.001" value="${project.plan || 0}">
-          </label>
-          <label>Tiến độ hiện nay
-            <textarea data-field="progress">${escapeHtml(project.progress)}</textarea>
-          </label>
-          <label>Khó khăn, vướng mắc
-            <textarea data-field="difficulty">${escapeHtml(project.difficulty)}</textarea>
-          </label>
-          <label>Đánh giá
-            <textarea data-field="evaluation">${escapeHtml(project.evaluation || project.status)}</textarea>
-          </label>
-        </div>
-      </article>
+        </td>
+        <td><span class="group-pill">Nhóm ${group}</span></td>
+        <td class="money-cell">${formatNumber(project.budget)} tỷ</td>
+        <td>${formatNumber(project.plan)} tỷ</td>
+        <td>
+          <div class="rate-cell"><strong>${disbRate}%</strong><div><span style="width:${disbRate}%"></span></div></div>
+        </td>
+        <td>
+          <div class="rate-cell green"><strong>${constructionRate}%</strong><div><span style="width:${constructionRate}%"></span></div></div>
+        </td>
+        <td><span class="project-status ${statusClass(project.status)}">${escapeHtml(project.status || "Đang cập nhật")}</span></td>
+        <td><button class="detail-action" data-detail="${project.stt - 1}" type="button">Chi tiết</button></td>
+      </tr>
     `;
-  }).join("") : `<div class="empty-state">Chưa có dữ liệu dự án. Hãy upload phụ lục Excel hoặc thêm dự án mới.</div>`;
+  }).join("") : `<tr><td colspan="8"><div class="empty-state">Chưa có dữ liệu dự án phù hợp.</div></td></tr>`;
 
-  els.projectRows.querySelectorAll("[data-field]").forEach((input) => {
-    input.addEventListener("change", handleProjectEdit);
-  });
-  els.projectRows.querySelectorAll("[data-delete]").forEach((button) => {
-    button.addEventListener("click", handleProjectDelete);
+  els.projectRows.querySelectorAll("[data-detail]").forEach((button) => {
+    button.addEventListener("click", () => openProjectDetail(Number(button.dataset.detail)));
   });
 }
 
@@ -563,6 +565,52 @@ function handleProjectDelete(event) {
   normalizeProjectNumbers();
   persistState();
   renderAll();
+}
+
+function openProjectDetail(index) {
+  const project = state.projects[index];
+  if (!project) return;
+  state.selectedProjectId = index;
+  renderProjectDetail(project);
+  showDetailTab("legalPane");
+  switchView("projectDetailView");
+}
+
+function renderProjectDetail(project) {
+  const index = state.projects.indexOf(project);
+  const group = deriveProjectGroup(project);
+  const disbRate = deriveDisbursementRate(project);
+  const progressRate = deriveProjectRate(project);
+  const plan = toNumber(project.plan);
+  const disbursed = plan * disbRate / 100;
+  const remaining = Math.max(0, plan - disbursed);
+
+  els.detailCode.textContent = `DA-2026-${String(index + 1).padStart(3, "0")}`;
+  els.detailGroup.textContent = `Nhóm ${group}`;
+  els.detailName.textContent = project.name;
+  els.detailMeta.textContent = `Phường Bình Tân | Chu kỳ thực hiện: ${project.period || "2026"}`;
+  els.detailBudget.textContent = `${formatNumber(project.budget * 1_000_000_000)} VNĐ`;
+  els.detailStatus.textContent = project.status || "Đang cập nhật";
+  els.detailStatus.className = `project-status ${statusClass(project.status)}`;
+  els.detailLegal.textContent = project.legal || "Đang cập nhật hồ sơ pháp lý.";
+  els.detailProgressDoc.textContent = project.progress || "Đang cập nhật tiến độ hồ sơ.";
+  els.detailPlan.textContent = `${formatNumber(plan * 1_000_000_000)} VNĐ`;
+  els.detailDisbursed.textContent = `${formatNumber(disbursed * 1_000_000_000)} VNĐ`;
+  els.detailDisbRate.textContent = `Tỷ lệ: ${disbRate}%`;
+  els.detailRemaining.textContent = `${formatNumber(remaining * 1_000_000_000)} VNĐ`;
+  els.detailContractValue.textContent = `${formatNumber(project.budget * 0.78)} tỷ`;
+  els.detailProgressRate.textContent = `${progressRate}%`;
+  els.detailProgressBar.style.width = `${progressRate}%`;
+  els.detailDifficulty.textContent = project.difficulty || project.progress || "Chưa ghi nhận khó khăn lớn.";
+}
+
+function showDetailTab(tabId) {
+  document.querySelectorAll(".detail-tab").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tabId);
+  });
+  document.querySelectorAll(".detail-pane").forEach((pane) => {
+    pane.classList.toggle("active", pane.id === tabId);
+  });
 }
 
 function addProject() {
@@ -821,6 +869,20 @@ function deriveProjectRate(project) {
   if (text.includes("cham") || text.includes("tam dung") || text.includes("khong bao dam")) return 35;
   if (text.includes("phe duyet") || text.includes("dang")) return 65;
   return 50;
+}
+
+function deriveDisbursementRate(project) {
+  if (project.plan && project.budget) {
+    return Math.max(5, Math.min(100, Math.round((toNumber(project.plan) / Math.max(toNumber(project.budget), 1)) * 100)));
+  }
+  return deriveProjectRate(project);
+}
+
+function deriveProjectGroup(project) {
+  const budget = toNumber(project.budget);
+  if (budget >= 500) return "A";
+  if (budget >= 100) return "B";
+  return "C";
 }
 
 function statusClass(status) {
