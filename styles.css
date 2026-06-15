@@ -393,8 +393,8 @@ textarea:focus {
 }
 
 .sidebar .brand-name {
-  max-width: 190px;
-  font-size: 18px;
+  max-width: 220px;
+  font-size: 17px;
   line-height: 1.15;
   text-transform: uppercase;
 }
@@ -406,9 +406,9 @@ textarea:focus {
 }
 
 .nav {
-  margin-top: 46px;
+  margin-top: 44px;
   display: grid;
-  gap: 20px;
+  gap: 18px;
 }
 
 .nav-item {
@@ -422,8 +422,10 @@ textarea:focus {
   color: #cbd5e1;
   background: transparent;
   text-align: left;
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1.2;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .nav-item.active,
@@ -496,7 +498,8 @@ textarea:focus {
 
 .topbar h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
+  font-weight: 900;
 }
 
 .topbar p {
@@ -512,8 +515,12 @@ textarea:focus {
 }
 
 .top-actions input {
-  width: 330px;
+  width: 360px;
   margin: 0;
+}
+
+.compact-export {
+  display: none;
 }
 
 .view {

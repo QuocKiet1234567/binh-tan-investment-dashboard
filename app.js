@@ -162,7 +162,7 @@ function switchView(viewId) {
   });
 
   const titleMap = {
-    dashboardView: ["Tổng quan báo cáo", "Dashboard điều hành phục vụ báo cáo cấp trên."],
+    dashboardView: ["Bảng điều khiển tổng quan", ""],
     importView: ["Nhập dữ liệu", "Upload Word/Excel để hệ thống tự phân tích."],
     projectsView: ["Danh mục dự án", "Chỉnh sửa dữ liệu trước khi xuất báo cáo."],
     reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."]
@@ -356,10 +356,11 @@ function renderDashboard() {
   const totalBudget = sum(projects, "budget");
   const totalPlan = sum(projects, "plan");
   const alerts = getAlertProjects();
+  const healthyRate = projects.length ? Math.round(((projects.length - alerts.length) / projects.length) * 100) : 0;
 
   els.kpiProjects.textContent = projects.length;
   els.kpiBudget.textContent = formatNumber(totalBudget);
-  els.kpiPlan.textContent = formatNumber(totalPlan);
+  els.kpiPlan.textContent = `${healthyRate}%`;
   els.kpiAlerts.textContent = alerts.length;
 
   els.sourceSummary.textContent = projects.length

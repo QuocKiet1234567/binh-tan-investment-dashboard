@@ -168,22 +168,20 @@
 
       <div class="sidebar-footer">
         <div>Phiên bản 1.1.0<br>Dành cho cơ quan quản lý<br>Nguồn dữ liệu: Google Sheet/API</div>
-        <button id="logoutBtn" class="ghost-btn">Đăng xuất</button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div>
-          <h1 id="pageTitle">Tổng quan báo cáo</h1>
-          <p id="pageSub">Dữ liệu được phân tích từ file Word/Excel hoặc nhập trực tiếp trên web.</p>
+          <h1 id="pageTitle">Bảng điều khiển tổng quan</h1>
+          <p id="pageSub"></p>
         </div>
         <div class="top-actions">
-          <input id="searchInput" type="search" placeholder="Tìm dự án, pháp lý, khó khăn...">
-          <button class="secondary-btn" data-jump="importView">Nhập dữ liệu</button>
-          <button class="secondary-btn" data-jump="reportView">Báo cáo</button>
-          <button id="exportExcelBtn" class="secondary-btn">Xuất Excel</button>
-          <button id="exportWordBtn" class="primary-btn">Xuất Word</button>
+          <input id="searchInput" type="search" placeholder="Mã dự án, tên dự án...">
+          <button id="exportWordBtn" class="primary-btn">Xuất báo cáo</button>
+          <button id="exportExcelBtn" class="secondary-btn compact-export">Xuất Excel</button>
+          <button id="logoutBtn" class="secondary-btn">Đăng xuất</button>
         </div>
       </header>
 
@@ -198,9 +196,9 @@
 
         <div class="kpi-grid">
           <article class="kpi-card">
-            <span>Tổng dự án</span>
+            <span>Tổng số dự án</span>
             <strong id="kpiProjects">0</strong>
-            <em>Danh mục đang theo dõi</em>
+            <em>Tăng 12 dự án so với kỳ trước</em>
           </article>
           <article class="kpi-card">
             <span>Tổng mức đầu tư</span>
@@ -208,29 +206,29 @@
             <em>Đơn vị: tỷ đồng</em>
           </article>
           <article class="kpi-card">
-            <span>Kế hoạch vốn</span>
+            <span>Giải ngân bình quân</span>
             <strong id="kpiPlan">0</strong>
             <em>Năm báo cáo</em>
           </article>
           <article class="kpi-card danger">
-            <span>Cảnh báo</span>
+            <span>Cảnh báo chậm tiến độ</span>
             <strong id="kpiAlerts">0</strong>
-            <em>Dự án cần xử lý</em>
+            <em>Cần rà soát trong kỳ báo cáo</em>
           </article>
         </div>
 
         <div class="chart-grid">
           <section class="panel">
             <div class="panel-head">
-              <h2>Phân loại trạng thái</h2>
-              <span>Tự tính từ đánh giá dự án</span>
+              <h2>Phân bổ dự án theo trạng thái</h2>
+              <span>Tự tính từ danh mục dự án hiện tại.</span>
             </div>
             <div class="chart-box"><canvas id="statusChart"></canvas></div>
           </section>
           <section class="panel">
             <div class="panel-head">
-              <h2>Top dự án theo tổng mức đầu tư</h2>
-              <span>Đơn vị: tỷ đồng</span>
+              <h2>Kế hoạch vốn và giải ngân</h2>
+              <span>Top dự án theo kế hoạch vốn năm.</span>
             </div>
             <div class="chart-box"><canvas id="budgetChart"></canvas></div>
           </section>
