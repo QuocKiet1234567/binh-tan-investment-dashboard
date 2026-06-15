@@ -81,7 +81,7 @@ button {
 }
 
 .brand-row.compact {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .brand-mark {
@@ -378,7 +378,7 @@ textarea:focus {
 
 .sidebar {
   min-height: 100vh;
-  padding: 24px;
+  padding: 30px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -386,24 +386,44 @@ textarea:focus {
   background: #0f172a;
 }
 
+.sidebar .brand-mark {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+.sidebar .brand-name {
+  max-width: 190px;
+  font-size: 18px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.sidebar .brand-sub {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .nav {
-  margin-top: 34px;
+  margin-top: 46px;
   display: grid;
-  gap: 8px;
+  gap: 20px;
 }
 
 .nav-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   border: 0;
   border-radius: 8px;
-  padding: 12px;
+  padding: 14px 16px;
   color: #cbd5e1;
   background: transparent;
   text-align: left;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .nav-item.active,
@@ -412,20 +432,43 @@ textarea:focus {
   background: rgba(255,255,255,.08);
 }
 
+.nav-item.disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+.nav-item.disabled:hover {
+  color: #cbd5e1;
+  background: transparent;
+}
+
 .icon {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   display: grid;
   place-items: center;
   background: rgba(148,163,184,.12);
   color: #93c5fd;
+  flex: 0 0 auto;
+}
+
+.icon svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 2.2;
+}
+
+.nav-item.active .icon {
+  background: #2563eb;
+  color: white;
 }
 
 .sidebar-footer {
   display: grid;
   gap: 16px;
-  padding-top: 18px;
+  margin: 0 -30px -30px;
+  padding: 26px 30px 30px;
   border-top: 1px solid rgba(255,255,255,.12);
   color: #94a3b8;
   font-size: 12px;

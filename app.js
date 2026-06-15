@@ -83,7 +83,9 @@ function bindEvents() {
   });
 
   document.querySelectorAll(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.view));
+    button.addEventListener("click", () => {
+      if (button.dataset.view) switchView(button.dataset.view);
+    });
   });
 
   document.querySelectorAll("[data-jump]").forEach((button) => {
