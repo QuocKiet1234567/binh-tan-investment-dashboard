@@ -133,7 +133,7 @@
             </span>
             Danh mục dự án
           </button>
-          <button class="nav-item disabled" type="button">
+          <button class="nav-item" data-view="capitalView">
             <span class="icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M4 19V5"></path>
@@ -143,7 +143,7 @@
             </span>
             Kế hoạch vốn
           </button>
-          <button class="nav-item disabled" type="button">
+          <button class="nav-item" data-view="periodicView">
             <span class="icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M7 3h7l4 4v14H7V3Z"></path>
@@ -154,7 +154,7 @@
             </span>
             Báo cáo định kỳ
           </button>
-          <button class="nav-item disabled" type="button">
+          <button class="nav-item" data-view="settingsView">
             <span class="icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"></path>
@@ -328,6 +328,121 @@
               <span>Tự sinh từ dữ liệu dự án</span>
             </div>
             <div id="presentationNotes" class="presentation-notes"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="capitalView" class="view">
+        <div class="notice capital-hero">
+          <div>
+            <strong>Kế hoạch vốn năm báo cáo</strong>
+            <span>Theo dõi tổng mức đầu tư, kế hoạch vốn, khả năng giải ngân và các khoản cần điều chỉnh.</span>
+          </div>
+          <button class="secondary-btn" data-jump="importView">Cập nhật từ Excel</button>
+        </div>
+
+        <div class="mini-grid">
+          <article class="mini-card">
+            <span>Tổng kế hoạch vốn</span>
+            <strong id="capitalTotalPlan">0</strong>
+            <em>Tỷ đồng</em>
+          </article>
+          <article class="mini-card">
+            <span>Dự án có khả năng chậm</span>
+            <strong id="capitalSlowCount">0</strong>
+            <em>Cần rà soát vốn</em>
+          </article>
+          <article class="mini-card">
+            <span>Tỷ lệ ổn định</span>
+            <strong id="capitalHealthyRate">0%</strong>
+            <em>Theo đánh giá hiện tại</em>
+          </article>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Bảng theo dõi kế hoạch vốn</h2>
+            <span>Tự tổng hợp từ danh mục dự án</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Tên dự án</th>
+                  <th>Tổng mức đầu tư</th>
+                  <th>Kế hoạch vốn</th>
+                  <th>Khả năng giải ngân</th>
+                  <th>Đánh giá</th>
+                </tr>
+              </thead>
+              <tbody id="capitalRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="periodicView" class="view">
+        <div class="report-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Báo cáo định kỳ</h2>
+              <span>Mẫu tóm tắt phục vụ họp, trình ký và báo cáo cấp trên</span>
+            </div>
+            <div id="periodicSummary" class="report-summary"></div>
+            <div class="action-row">
+              <button class="primary-btn" id="periodicExportBtn" type="button">Xuất Word báo cáo</button>
+              <button class="secondary-btn" data-jump="reportView" type="button">Chỉnh thuyết minh</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Danh sách nội dung cần nhấn mạnh</h2>
+              <span>Tự sinh từ cảnh báo và khó khăn</span>
+            </div>
+            <div id="periodicRows" class="presentation-notes"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view">
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Cấu hình hệ thống</h2>
+              <span>Thiết lập dữ liệu, đăng nhập và xuất báo cáo</span>
+            </div>
+            <div class="settings-list">
+              <div>
+                <strong>Nguồn dữ liệu</strong>
+                <span>Upload Word/Excel trực tiếp trên web. Dữ liệu được lưu tạm trên trình duyệt.</span>
+              </div>
+              <div>
+                <strong>Phiên đăng nhập</strong>
+                <span>Đăng nhập nội bộ bản demo. Có thể nâng cấp lên tài khoản thật khi gắn database.</span>
+              </div>
+              <div>
+                <strong>Trạng thái lưu trữ</strong>
+                <span id="settingStorageStatus">Đang kiểm tra...</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Thao tác nhanh</h2>
+              <span>Quản trị dữ liệu báo cáo</span>
+            </div>
+            <div class="settings-actions">
+              <button class="primary-btn" data-jump="importView" type="button">Nhập dữ liệu mới</button>
+              <button class="secondary-btn" id="settingsExportExcelBtn" type="button">Xuất Excel</button>
+              <button class="secondary-btn" id="settingsClearBtn" type="button">Xóa dữ liệu cục bộ</button>
+            </div>
+            <div class="settings-meter">
+              <span>Dự án đang lưu</span>
+              <strong id="settingProjectCount">0</strong>
+            </div>
           </section>
         </div>
       </section>

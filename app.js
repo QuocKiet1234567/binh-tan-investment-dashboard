@@ -61,7 +61,10 @@ function cacheElements() {
     "kpiProjects", "kpiBudget", "kpiPlan", "kpiAlerts", "alertList", "fileInput",
     "chooseFileBtn", "dropZone", "analysisStatus", "analysisLog", "previewRows",
     "projectRows", "clearDataBtn", "addProjectBtn", "exportExcelBtn", "exportWordBtn",
-    "reportText", "docStatus", "presentationNotes"
+    "reportText", "docStatus", "presentationNotes", "capitalRows", "capitalTotalPlan",
+    "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
+    "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
+    "settingsExportExcelBtn", "settingsClearBtn"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -77,6 +80,9 @@ function bindEvents() {
   els.addProjectBtn.addEventListener("click", addProject);
   els.exportExcelBtn.addEventListener("click", exportCsv);
   els.exportWordBtn.addEventListener("click", exportWord);
+  els.periodicExportBtn.addEventListener("click", exportWord);
+  els.settingsExportExcelBtn.addEventListener("click", exportCsv);
+  els.settingsClearBtn.addEventListener("click", clearData);
   els.reportText.addEventListener("input", () => {
     state.reportText = els.reportText.value;
     persistState();
@@ -165,7 +171,10 @@ function switchView(viewId) {
     dashboardView: ["Bảng điều khiển tổng quan", ""],
     importView: ["Nhập dữ liệu", "Upload Word/Excel để hệ thống tự phân tích."],
     projectsView: ["Danh mục dự án", "Chỉnh sửa dữ liệu trước khi xuất báo cáo."],
-    reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."]
+    reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."],
+    capitalView: ["Kế hoạch vốn", "Theo dõi kế hoạch vốn, giải ngân và điều chỉnh trong kỳ."],
+    periodicView: ["Báo cáo định kỳ", "Tổng hợp nội dung phục vụ họp và báo cáo cấp trên."],
+    settingsView: ["Cấu hình hệ thống", "Quản trị dữ liệu, phiên làm việc và thao tác hệ thống."]
   };
   const [title, sub] = titleMap[viewId] || titleMap.dashboardView;
   els.pageTitle.textContent = title;
@@ -349,6 +358,9 @@ function renderAll() {
   renderPreview();
   renderProjectsTable();
   renderReport();
+  renderCapitalPlan();
+  renderPeriodicReport();
+  renderSettings();
 }
 
 function renderDashboard() {
@@ -537,6 +549,56 @@ function renderReport() {
       <p>${alerts.length ? `Có ${alerts.length} dự án cần báo cáo khó khăn, vướng mắc hoặc hướng xử lý.` : "Chưa phát hiện cảnh báo trọng yếu trong dữ liệu hiện tại."}</p>
     </div>
   `;
+}
+
+function renderCapitalPlan() {
+  const projects = state.projects;
+  const alerts = getAlertProjects();
+  const healthyRate = projects.length ? Math.round(((projects.length - alerts.length) / projects.length) * 100) : 0;
+
+  els.capitalTotalPlan.textContent = formatNumber(sum(projects, "plan"));
+  els.capitalSlowCount.textContent = alerts.length;
+  els.capitalHealthyRate.textContent = `${healthyRate}%`;
+
+  els.capitalRows.innerHTML = projects.length ? projects.map((project) => `
+    <tr>
+      <td>${project.stt}</td>
+      <td><strong>${escapeHtml(project.name)}</strong></td>
+      <td>${formatNumber(project.budget)}</td>
+      <td>${formatNumber(project.plan)}</td>
+      <td>${escapeHtml(project.disbursement || "Đang cập nhật")}</td>
+      <td>${escapeHtml(project.evaluation || project.status)}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="6">Chưa có dữ liệu kế hoạch vốn. Hãy nhập dữ liệu từ file Excel.</td></tr>`;
+}
+
+function renderPeriodicReport() {
+  const projects = state.projects;
+  const alerts = getAlertProjects();
+  const totalBudget = sum(projects, "budget");
+  const totalPlan = sum(projects, "plan");
+
+  els.periodicSummary.innerHTML = `
+    <strong>Ủy ban nhân dân Phường Bình Tân</strong><br>
+    Tổng hợp ${projects.length} dự án đầu tư công, tổng mức đầu tư khoảng <strong>${formatNumber(totalBudget)} tỷ đồng</strong>,
+    kế hoạch vốn năm báo cáo khoảng <strong>${formatNumber(totalPlan)} tỷ đồng</strong>.
+    Hiện có <strong>${alerts.length}</strong> dự án cần tiếp tục rà soát về tiến độ, pháp lý hoặc khả năng giải ngân.
+  `;
+
+  const rows = alerts.length ? alerts : projects.slice(0, 5);
+  els.periodicRows.innerHTML = rows.length ? rows.map((project) => `
+    <div class="note-card">
+      <strong>${escapeHtml(project.name)}</strong>
+      <p>${escapeHtml(project.difficulty || project.progress || project.disbursement || "Dự án đang được cập nhật thông tin phục vụ báo cáo định kỳ.")}</p>
+    </div>
+  `).join("") : `<div class="note-card"><strong>Chưa có dữ liệu</strong><p>Upload phụ lục Excel hoặc nhập dự án để sinh nội dung báo cáo định kỳ.</p></div>`;
+}
+
+function renderSettings() {
+  els.settingProjectCount.textContent = state.projects.length;
+  els.settingStorageStatus.textContent = state.projects.length
+    ? `Đã lưu ${state.projects.length} dự án trên trình duyệt này.`
+    : "Chưa có dữ liệu cục bộ.";
 }
 
 function exportCsv() {
