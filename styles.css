@@ -865,10 +865,13 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .master-actions select {
+  appearance: none;
   min-height: 38px;
+  min-width: 150px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -876,6 +879,11 @@ textarea:focus {
   color: #334155;
   font-weight: 800;
   outline: none;
+  white-space: nowrap;
+}
+
+.master-actions select:first-child {
+  min-width: 190px;
 }
 
 .master-table {
@@ -893,6 +901,8 @@ textarea:focus {
   font-weight: 900;
   text-align: left;
   text-transform: uppercase;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .master-table td {
@@ -901,6 +911,35 @@ textarea:focus {
   color: #334155;
   font-size: 13px;
   vertical-align: middle;
+}
+
+.master-table th:nth-child(2),
+.master-table td:nth-child(2) {
+  width: 86px;
+}
+
+.master-table th:nth-child(3),
+.master-table td:nth-child(3),
+.master-table th:nth-child(4),
+.master-table td:nth-child(4) {
+  width: 128px;
+}
+
+.master-table th:nth-child(5),
+.master-table td:nth-child(5),
+.master-table th:nth-child(6),
+.master-table td:nth-child(6) {
+  width: 150px;
+}
+
+.master-table th:nth-child(7),
+.master-table td:nth-child(7) {
+  width: 170px;
+}
+
+.master-table th:nth-child(8),
+.master-table td:nth-child(8) {
+  width: 86px;
 }
 
 .master-table tbody tr:hover {
@@ -923,12 +962,18 @@ textarea:focus {
 }
 
 .group-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
   border-radius: 6px;
   background: #f1f5f9;
   padding: 5px 8px;
   color: #334155;
   font-size: 11px;
   font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .money-cell {
@@ -978,6 +1023,7 @@ textarea:focus {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .back-link {
@@ -1314,11 +1360,15 @@ textarea:focus {
 }
 
 .project-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   border-radius: 999px;
   padding: 5px 9px;
   font-size: 10px;
   font-weight: 900;
+  line-height: 1;
   white-space: nowrap;
 }
 

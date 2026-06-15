@@ -296,8 +296,12 @@ function extractProjectsFromRows(rows) {
 
     if (!isProjectRow(row, name)) continue;
 
-    const numericBand = row.slice(budgetIndex + 1, budgetIndex + 5).map(toNumber).filter((value) => value > 0);
     const periodIndex = row.findIndex((cell) => /\b20\d{2}\b/.test(stringify(cell)));
+    const planEndIndex = periodIndex > budgetIndex ? periodIndex : budgetIndex + 5;
+    const planCandidates = row
+      .slice(budgetIndex + 1, planEndIndex)
+      .map(toMoneyNumber)
+      .filter((value) => value > 0);
     const legalIndex = findFirstTextIndex(row, ["phê duyệt", "chủ trương", "pháp lý"], Math.max(5, periodIndex + 1));
     const progressIndex = findFirstTextIndex(row, ["đang", "chậm", "hoàn", "dự kiến", "tạm dừng", "rà soát"], legalIndex + 1);
     const evaluationIndex = findFirstTextIndex(row, ["đảm bảo", "chậm", "không"], progressIndex + 1);
@@ -305,8 +309,8 @@ function extractProjectsFromRows(rows) {
     const project = {
       stt: projects.length + 1,
       name,
-      budget: toNumber(row[budgetIndex]),
-      plan: numericBand.length ? numericBand[numericBand.length - 1] : 0,
+      budget: toMoneyNumber(row[budgetIndex]) || toNumber(row[budgetIndex]),
+      plan: planCandidates.length ? planCandidates[planCandidates.length - 1] : 0,
       legal: stringify(row[legalIndex] || ""),
       progress: stringify(row[progressIndex] || ""),
       disbursement: stringify(row[progressIndex + 1] || ""),
@@ -327,7 +331,7 @@ function isProjectRow(row, name) {
   if (!name || name.length < 8) return false;
   const normalized = normalizeText(name);
   if (normalized.includes("tong") || normalized.includes("du an su dung")) return false;
-  return row.some((cell) => toNumber(cell) > 0);
+  return row.some((cell) => toMoneyNumber(cell) > 0);
 }
 
 function findHeaderIndex(header, terms) {
@@ -343,7 +347,7 @@ function findFirstTextIndex(row, terms, start = 0) {
   const normalizedTerms = terms.map(normalizeText);
   for (let index = Math.max(0, start); index < row.length; index += 1) {
     const text = normalizeText(row[index]);
-    if (text.length < 4 || toNumber(row[index]) > 0) continue;
+    if (text.length < 4 || toMoneyNumber(row[index]) > 0) continue;
     if (normalizedTerms.some((term) => text.includes(term))) return index;
   }
   return Math.max(0, start);
@@ -898,6 +902,42 @@ function toNumber(value) {
   return match ? Number(match[0]) : 0;
 }
 
+function toMoneyNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  let raw = stringify(value);
+  if (!raw) return 0;
+
+  const normalized = normalizeText(raw);
+  const hasMoneyUnit = ["ty", "trieu", "dong", "vnd"].some((unit) => normalized.includes(unit));
+  if (/\b20\d{2}\b/.test(raw) && !hasMoneyUnit) return 0;
+  if (/[%/]/.test(raw)) return 0;
+  if (/[a-zA-ZÀ-ỹ]/.test(raw) && !hasMoneyUnit) return 0;
+
+  raw = raw.replace(/\b20\d{2}\b/g, "");
+  if (hasMoneyUnit) {
+    raw = raw.replace(/[^\d.,\s-]/g, "");
+  }
+
+  if (!/^-?\s*[\d.,\s]+$/.test(raw)) return 0;
+
+  const compact = raw.replace(/\s/g, "");
+  let parsedText = compact;
+
+  if (compact.includes(",") && compact.includes(".")) {
+    parsedText = compact.lastIndexOf(",") > compact.lastIndexOf(".")
+      ? compact.replace(/\./g, "").replace(",", ".")
+      : compact.replace(/,/g, "");
+  } else if (compact.includes(",")) {
+    parsedText = compact.replace(",", ".");
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(compact)) {
+    parsedText = compact.replace(/\./g, "");
+  }
+
+  const number = Number(parsedText);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function formatNumber(value) {
   return toNumber(value).toLocaleString("vi-VN", { maximumFractionDigits: 3 });
 }
@@ -911,6 +951,11 @@ function deriveProjectRate(project) {
 }
 
 function deriveDisbursementRate(project) {
+  const text = normalizeText([project.disbursement, project.evaluation, project.progress].join(" "));
+  const percentMatch = text.match(/(\d{1,3})\s*%/);
+  if (percentMatch) return Math.max(0, Math.min(100, Number(percentMatch[1])));
+  if (text.includes("100") || text.includes("dam bao") || text.includes("du kien giai ngan")) return 100;
+  if (text.includes("cham") || text.includes("khong bao dam") || text.includes("vuong")) return 35;
   if (project.plan && project.budget) {
     return Math.max(5, Math.min(100, Math.round((toNumber(project.plan) / Math.max(toNumber(project.budget), 1)) * 100)));
   }
