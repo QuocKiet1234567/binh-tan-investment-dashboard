@@ -39,20 +39,20 @@ button {
 .login-screen {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(420px, .9fr);
+  grid-template-columns: minmax(560px, 1.05fr) minmax(440px, .95fr);
   background: #f8fafc;
 }
 
 .login-info {
   min-height: 100vh;
-  padding: 46px;
+  padding: 52px 60px;
   color: #fff;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   background:
-    linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,64,175,.88)),
-    radial-gradient(circle at 80% 80%, rgba(14,165,233,.34), transparent 32%);
+    linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,64,175,.9)),
+    radial-gradient(circle at 82% 80%, rgba(14,165,233,.28), transparent 30%);
   overflow: hidden;
   position: relative;
 }
@@ -62,10 +62,22 @@ button {
   position: absolute;
   right: -150px;
   bottom: -180px;
-  width: 520px;
-  height: 520px;
+  width: 560px;
+  height: 560px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,.14);
+}
+
+.login-info::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(90deg, rgba(0,0,0,.65), transparent 78%);
+  pointer-events: none;
 }
 
 .brand-row {
@@ -81,8 +93,8 @@ button {
 }
 
 .brand-mark {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   border-radius: 8px;
   display: grid;
   place-items: center;
@@ -92,7 +104,8 @@ button {
 }
 
 .brand-name {
-  font-size: 16px;
+  max-width: 360px;
+  font-size: 17px;
   line-height: 1.2;
   font-weight: 900;
 }
@@ -105,7 +118,7 @@ button {
 }
 
 .login-copy {
-  max-width: 760px;
+  max-width: 650px;
   position: relative;
   z-index: 1;
 }
@@ -119,9 +132,9 @@ button {
 
 .login-copy h1 {
   margin: 18px 0 0;
-  max-width: 720px;
-  font-size: clamp(38px, 4.4vw, 68px);
-  line-height: 1.02;
+  max-width: 610px;
+  font-size: clamp(38px, 4vw, 54px);
+  line-height: 1.08;
   letter-spacing: 0;
 }
 
@@ -134,12 +147,12 @@ button {
 }
 
 .unit-card {
-  width: min(100%, 620px);
+  width: min(100%, 590px);
   border: 1px solid rgba(255,255,255,.16);
   background: rgba(15,23,42,.2);
   backdrop-filter: blur(8px);
   border-radius: 8px;
-  padding: 18px;
+  padding: 18px 20px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -166,39 +179,57 @@ button {
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 
 .login-features div {
-  min-height: 96px;
+  min-height: 136px;
   border: 1px solid rgba(255,255,255,.16);
   border-radius: 8px;
-  background: rgba(255,255,255,.1);
-  padding: 15px;
+  background: rgba(255,255,255,.09);
+  padding: 14px;
 }
 
-.login-features strong {
-  display: block;
+.feature-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,.14);
   color: #bfdbfe;
-  font-size: 12px;
+}
+
+.feature-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+
+.login-features b {
+  display: block;
+  margin-top: 12px;
+  color: white;
+  font-size: 13px;
 }
 
 .login-features span {
   display: block;
-  margin-top: 14px;
-  font-size: 13px;
+  margin-top: 6px;
+  color: #dbeafe;
+  font-size: 12px;
   line-height: 1.45;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .login-card {
-  width: min(100%, 430px);
+  width: min(100%, 460px);
   margin: auto;
-  padding: 34px;
+  padding: 40px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
-  box-shadow: 0 24px 70px rgba(15,23,42,.1);
+  box-shadow: 0 26px 80px rgba(15,23,42,.11);
 }
 
 .form-head span {
@@ -213,8 +244,15 @@ button {
   font-size: 28px;
 }
 
+.form-head strong {
+  display: block;
+  margin-top: 10px;
+  color: #1e293b;
+  font-size: 14px;
+}
+
 .form-head p {
-  margin: 12px 0 26px;
+  margin: 10px 0 26px;
   color: var(--muted);
   line-height: 1.6;
 }
