@@ -401,7 +401,7 @@ function renderCharts() {
   const statusCounts = countBy(state.projects, "status");
   const labels = Object.keys(statusCounts);
   const values = Object.values(statusCounts);
-  const top = [...state.projects].sort((a, b) => b.budget - a.budget).slice(0, 8);
+  const top = [...state.projects].sort((a, b) => b.budget - a.budget).slice(0, 7);
 
   if (state.charts.status) state.charts.status.destroy();
   if (state.charts.budget) state.charts.budget.destroy();
@@ -413,33 +413,59 @@ function renderCharts() {
       datasets: [{
         data: values.length ? values : [1],
         backgroundColor: ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#64748b"],
-        borderWidth: 0
+        borderColor: "#ffffff",
+        borderWidth: 4,
+        hoverOffset: 5
       }]
     },
     options: {
       maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom" } },
-      cutout: "68%"
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 14, font: { size: 11, weight: "700" } }
+        }
+      },
+      cutout: "72%"
     }
   });
 
   state.charts.budget = new Chart(document.getElementById("budgetChart"), {
     type: "bar",
     data: {
-      labels: top.length ? top.map((project) => `D${project.stt}`) : ["Chưa có dữ liệu"],
+      labels: top.length ? top.map((project) => shortProjectName(project.name)) : ["Chưa có dữ liệu"],
       datasets: [{
-        label: "Tổng mức đầu tư",
+        label: "Tổng mức đầu tư (tỷ đồng)",
         data: top.length ? top.map((project) => project.budget) : [0],
         backgroundColor: "#2563eb",
-        borderRadius: 6
+        borderColor: "#1d4ed8",
+        borderWidth: 1,
+        borderRadius: 4,
+        barThickness: 18
       }]
     },
     options: {
+      indexAxis: "y",
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex]?.name || "",
+            label: (item) => ` ${formatNumber(item.raw)} tỷ đồng`
+          }
+        }
+      },
       scales: {
-        y: { beginAtZero: true, grid: { color: "#edf2f7" } },
-        x: { grid: { display: false } }
+        x: {
+          beginAtZero: true,
+          grid: { color: "#edf2f7" },
+          ticks: { font: { size: 10 } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 10, weight: "700" } }
+        }
       }
     }
   });
@@ -756,6 +782,15 @@ function toNumber(value) {
 
 function formatNumber(value) {
   return toNumber(value).toLocaleString("vi-VN", { maximumFractionDigits: 3 });
+}
+
+function shortProjectName(value) {
+  const text = stringify(value)
+    .replace(/^Nâng cấp,\s*/i, "")
+    .replace(/^Xây dựng mới\s*/i, "")
+    .replace(/^Đầu tư\s*/i, "")
+    .replace(/^Cải tạo\s*/i, "");
+  return text.length > 34 ? text.slice(0, 31).trim() + "..." : text;
 }
 
 function normalizeText(value) {

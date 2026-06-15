@@ -285,7 +285,7 @@ textarea {
 
 input {
   margin-top: 8px;
-  padding: 12px 13px;
+  padding: 10px 12px;
 }
 
 textarea {
@@ -335,11 +335,11 @@ textarea:focus {
 .primary-btn,
 .secondary-btn,
 .ghost-btn {
-  min-height: 42px;
+  min-height: 38px;
   border-radius: 8px;
   border: 1px solid transparent;
-  padding: 0 16px;
-  font-size: 14px;
+  padding: 0 14px;
+  font-size: 13px;
   font-weight: 900;
 }
 
@@ -483,8 +483,8 @@ textarea:focus {
 }
 
 .topbar {
-  min-height: 76px;
-  padding: 18px 24px;
+  min-height: 68px;
+  padding: 14px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -498,12 +498,12 @@ textarea:focus {
 
 .topbar h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 900;
 }
 
 .topbar p {
-  margin: 5px 0 0;
+  margin: 3px 0 0;
   color: var(--muted);
   font-size: 13px;
 }
@@ -525,7 +525,7 @@ textarea:focus {
 
 .view {
   display: none;
-  padding: 24px;
+  padding: 20px 22px;
 }
 
 .view.active {
@@ -543,7 +543,7 @@ textarea:focus {
 }
 
 .notice {
-  padding: 18px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -559,19 +559,19 @@ textarea:focus {
 .notice span {
   margin-top: 5px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .kpi-grid {
-  margin-top: 22px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 .kpi-card {
-  min-height: 140px;
-  padding: 20px;
+  min-height: 112px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -590,13 +590,13 @@ textarea:focus {
 
 .kpi-card span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .kpi-card strong {
-  font-size: 34px;
+  font-size: 28px;
   line-height: 1;
   color: var(--ink);
 }
@@ -604,7 +604,7 @@ textarea:focus {
 .kpi-card em {
   color: var(--muted);
   font-style: normal;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -615,14 +615,22 @@ textarea:focus {
 .chart-grid,
 .import-grid,
 .report-layout {
-  margin-top: 22px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 .panel {
-  padding: 20px;
+  padding: 16px;
+}
+
+.chart-grid .panel {
+  min-height: 340px;
+}
+
+.chart-grid canvas {
+  max-width: 100%;
 }
 
 .panel + .panel,
@@ -631,7 +639,7 @@ textarea:focus {
 }
 
 .panel-head {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -640,17 +648,17 @@ textarea:focus {
 
 .panel-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 15px;
 }
 
 .panel-head span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .chart-box {
-  height: 330px;
+  height: 286px;
 }
 
 .alert-list {
@@ -747,21 +755,21 @@ textarea:focus {
 }
 
 .data-table th {
-  padding: 12px;
+  padding: 10px 12px;
   background: #f8fafc;
   border-bottom: 1px solid var(--line);
   color: #475569;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   text-align: left;
   text-transform: uppercase;
 }
 
 .data-table td {
-  padding: 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid #eef2f7;
   color: #334155;
-  font-size: 13px;
+  font-size: 12px;
   vertical-align: top;
 }
 
