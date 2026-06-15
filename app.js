@@ -79,8 +79,14 @@ function cacheElements() {
 function bindEvents() {
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", handleLogout);
-  els.chooseFileBtn.addEventListener("click", () => els.fileInput.click());
-  els.fileInput.addEventListener("change", (event) => handleFiles([...event.target.files]));
+  els.chooseFileBtn.addEventListener("click", () => {
+    els.fileInput.value = "";
+    els.fileInput.click();
+  });
+  els.fileInput.addEventListener("change", async (event) => {
+    await handleFiles([...event.target.files]);
+    event.target.value = "";
+  });
   els.searchInput.addEventListener("input", renderProjectsTable);
   els.projectStatusFilter.addEventListener("change", renderProjectsTable);
   els.projectGroupFilter.addEventListener("change", renderProjectsTable);
@@ -126,6 +132,7 @@ function bindEvents() {
   });
 
   els.dropZone.addEventListener("drop", (event) => {
+    els.fileInput.value = "";
     handleFiles([...event.dataTransfer.files]);
   });
 }
@@ -233,6 +240,7 @@ async function handleFiles(files) {
   }
 
   els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
+  els.fileInput.value = "";
   persistState();
   renderAll();
   switchView("dashboardView");
@@ -243,11 +251,18 @@ function readExcel(file) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        if (!window.XLSX) {
+          throw new Error("Thư viện đọc Excel chưa tải xong. Vui lòng refresh trang và thử lại.");
+        }
+
         const workbook = XLSX.read(reader.result, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        resolve(rows);
+        const sheetRows = workbook.SheetNames.map((sheetName) => {
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          return { sheetName, rows };
+        });
+        const bestSheet = sheetRows.sort((a, b) => b.rows.length - a.rows.length)[0];
+        resolve(bestSheet?.rows || []);
       } catch (error) {
         reject(error);
       }
@@ -272,7 +287,7 @@ function extractProjectsFromRows(rows) {
   }
 
   const header = rows[headerIndex] || [];
-  const nameIndex = findHeaderIndex(header, ["ten du an"]) ?? 2;
+  const nameIndex = findHeaderIndex(header, ["ten du an"]) ?? guessProjectNameIndex(rows, headerIndex + 1) ?? 2;
   const budgetIndex = findHeaderIndex(header, ["tong muc dau tu"]) ?? 3;
 
   for (let index = Math.max(headerIndex + 1, 0); index < rows.length; index += 1) {
@@ -332,6 +347,23 @@ function findFirstTextIndex(row, terms, start = 0) {
     if (normalizedTerms.some((term) => text.includes(term))) return index;
   }
   return Math.max(0, start);
+}
+
+function guessProjectNameIndex(rows, start = 0) {
+  const scores = new Map();
+
+  rows.slice(Math.max(0, start), start + 30).forEach((row) => {
+    row.forEach((cell, index) => {
+      const text = stringify(cell);
+      const normalized = normalizeText(text);
+      if (text.length >= 14 && !normalized.includes("tong") && !/\b20\d{2}\b/.test(text) && toNumber(text) === 0) {
+        scores.set(index, (scores.get(index) || 0) + text.length);
+      }
+    });
+  });
+
+  const best = [...scores.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : null;
 }
 
 function deriveStatus(project) {
