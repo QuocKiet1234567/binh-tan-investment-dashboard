@@ -59,7 +59,7 @@ function cacheElements() {
   [
     "loginScreen", "appShell", "loginForm", "loginUser", "loginPass", "rememberMe",
     "loginError", "logoutBtn", "pageTitle", "pageSub", "searchInput", "sourceSummary",
-    "kpiProjects", "kpiBudget", "kpiPlan", "kpiAlerts", "alertList", "fileInput",
+    "kpiProjects", "kpiBudget", "kpiPlan", "kpiAlerts", "statusSummary", "budgetSummary", "alertList", "fileInput",
     "chooseFileBtn", "dropZone", "analysisStatus", "analysisLog", "previewRows",
     "projectRows", "clearDataBtn", "addProjectBtn", "exportExcelBtn", "exportWordBtn",
     "reportText", "docStatus", "presentationNotes", "capitalRows", "capitalTotalPlan",
@@ -1089,4 +1089,179 @@ function renderCapitalPlan() {
       </tr>
     `;
   }).join("") : `<tr><td colspan="6">Chua co du lieu ke hoach von. Hay nhap du lieu tu file Excel.</td></tr>`;
+}
+
+function buildStatusBuckets(projects) {
+  const buckets = [
+    { key: "good", label: "Dam bao tien do", color: "#2563eb", value: 0 },
+    { key: "active", label: "Dang trien khai", color: "#16a34a", value: 0 },
+    { key: "done", label: "Hoan thanh", color: "#0f766e", value: 0 },
+    { key: "risk", label: "Can xu ly", color: "#dc2626", value: 0 }
+  ];
+
+  projects.forEach((project) => {
+    const text = normalizeText([project.status, project.evaluation, project.progress].join(" "));
+    if (text.includes("hoan thanh")) {
+      buckets[2].value += 1;
+    } else if (text.includes("cham") || text.includes("xu ly") || text.includes("vuong") || text.includes("khong bao dam")) {
+      buckets[3].value += 1;
+    } else if (text.includes("dam bao")) {
+      buckets[0].value += 1;
+    } else {
+      buckets[1].value += 1;
+    }
+  });
+
+  return buckets.filter((item) => item.value > 0);
+}
+
+function renderCharts() {
+  const statusBuckets = buildStatusBuckets(state.projects);
+  const labels = statusBuckets.map((item) => item.label);
+  const values = statusBuckets.map((item) => item.value);
+  const colors = statusBuckets.map((item) => item.color);
+  const top = [...state.projects]
+    .sort((a, b) => toNumber(b.plan) - toNumber(a.plan))
+    .slice(0, 6);
+
+  const centerTextPlugin = {
+    id: "centerTextPlugin",
+    afterDraw(chart, args, options) {
+      if (!options || !chart?.getDatasetMeta(0)?.data?.length) return;
+      const { ctx } = chart;
+      const point = chart.getDatasetMeta(0).data[0];
+      if (!point) return;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 28px Inter, system-ui, sans-serif";
+      ctx.fillText(options.title || "", point.x, point.y - 10);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "700 12px Inter, system-ui, sans-serif";
+      ctx.fillText(options.subtitle || "", point.x, point.y + 16);
+      ctx.restore();
+    }
+  };
+
+  if (state.charts.status) state.charts.status.destroy();
+  if (state.charts.budget) state.charts.budget.destroy();
+
+  state.charts.status = new Chart(document.getElementById("statusChart"), {
+    type: "doughnut",
+    data: {
+      labels: labels.length ? labels : ["Chua co du lieu"],
+      datasets: [{
+        data: values.length ? values : [1],
+        backgroundColor: colors.length ? colors : ["#cbd5e1"],
+        borderColor: "#ffffff",
+        borderWidth: 5,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        centerTextPlugin: {
+          title: `${state.projects.length}`,
+          subtitle: "du an"
+        },
+        legend: {
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 14, font: { size: 11, weight: "700" } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const total = values.reduce((sum, value) => sum + value, 0) || 1;
+              const percent = Math.round((item.raw / total) * 100);
+              return ` ${item.label}: ${item.raw} du an (${percent}%)`;
+            }
+          }
+        }
+      },
+      cutout: "70%"
+    },
+    plugins: [centerTextPlugin]
+  });
+
+  state.charts.budget = new Chart(document.getElementById("budgetChart"), {
+    type: "bar",
+    data: {
+      labels: top.length ? top.map((project) => shortProjectName(project.name)) : ["Chua co du lieu"],
+      datasets: [{
+        label: "Ke hoach von",
+        data: top.length ? top.map((project) => toNumber(project.plan)) : [0],
+        backgroundColor: "#2563eb",
+        borderColor: "#1d4ed8",
+        borderWidth: 1,
+        borderRadius: 6,
+        barThickness: 12
+      }, {
+        label: "Giai ngan uoc tinh",
+        data: top.length ? top.map((project) => Math.round(toNumber(project.plan) * deriveDisbursementRate(project) / 100)) : [0],
+        backgroundColor: "#93c5fd",
+        borderColor: "#60a5fa",
+        borderWidth: 1,
+        borderRadius: 6,
+        barThickness: 12
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+          align: "start",
+          labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", padding: 16, font: { size: 11, weight: "700" } }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex]?.name || "",
+            label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} ty dong`
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: "#edf2f7" },
+          ticks: {
+            font: { size: 10 },
+            callback: (value) => formatNumber(value)
+          }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 10, weight: "700" } }
+        }
+      }
+    }
+  });
+
+  els.statusSummary.innerHTML = statusBuckets.map((item) => {
+    const percent = state.projects.length ? Math.round((item.value / state.projects.length) * 100) : 0;
+    return `
+      <div class="chart-stat">
+        <span class="chart-dot" style="background:${item.color}"></span>
+        <div>
+          <strong>${item.value} du an</strong>
+          <em>${item.label} ${percent}%</em>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const totalPlannedTop = top.reduce((sum, project) => sum + toNumber(project.plan), 0);
+  const totalDisbursedTop = top.reduce((sum, project) => sum + Math.round(toNumber(project.plan) * deriveDisbursementRate(project) / 100), 0);
+  const leadProject = top[0];
+
+  els.budgetSummary.innerHTML = `
+    <div class="chart-note"><strong>Top 6 ke hoach von:</strong> ${formatNumber(totalPlannedTop)} ty dong</div>
+    <div class="chart-note"><strong>Giai ngan uoc tinh:</strong> ${formatNumber(totalDisbursedTop)} ty dong</div>
+    <div class="chart-note"><strong>Du an dung dau:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 64) : "Dang cap nhat")}</div>
+  `;
 }

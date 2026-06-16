@@ -699,6 +699,50 @@ textarea:focus {
   height: 286px;
 }
 
+.chart-summary {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.chart-stat,
+.chart-note {
+  border: 1px solid #e6edf7;
+  border-radius: 12px;
+  background: rgba(248,251,255,.9);
+  padding: 11px 12px;
+}
+
+.chart-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.chart-stat strong,
+.chart-note strong {
+  display: block;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chart-stat em,
+.chart-note {
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .alert-list {
   display: grid;
   gap: 10px;
