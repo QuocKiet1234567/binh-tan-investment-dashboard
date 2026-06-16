@@ -300,7 +300,7 @@ function extractProjectsFromRows(rows) {
     const planEndIndex = periodIndex > budgetIndex ? periodIndex : budgetIndex + 5;
     const planCandidates = row
       .slice(budgetIndex + 1, planEndIndex)
-      .map(toMoneyNumber)
+      .map(toPlanNumber)
       .filter((value) => value > 0);
     const legalIndex = findFirstTextIndex(row, ["phê duyệt", "chủ trương", "pháp lý"], Math.max(5, periodIndex + 1));
     const progressIndex = findFirstTextIndex(row, ["đang", "chậm", "hoàn", "dự kiến", "tạm dừng", "rà soát"], legalIndex + 1);
@@ -399,6 +399,7 @@ function normalizeProjectNumbers() {
   state.projects = state.projects.map((project, index) => ({
     ...project,
     stt: index + 1,
+    plan: sanitizePlanValue(project.plan),
     status: project.status || deriveStatus(project)
   }));
 }
@@ -851,6 +852,7 @@ function restoreState() {
     state.files = parsed.files || [];
     els.reportText.value = state.reportText;
     normalizeProjectNumbers();
+    persistState();
   } catch {
     state.projects = demoProjects;
   }
@@ -936,6 +938,20 @@ function toMoneyNumber(value) {
 
   const number = Number(parsedText);
   return Number.isFinite(number) ? number : 0;
+}
+
+function toPlanNumber(value) {
+  const number = toMoneyNumber(value);
+  return isLikelyYearValue(number) ? 0 : number;
+}
+
+function sanitizePlanValue(value) {
+  const number = toNumber(value);
+  return isLikelyYearValue(number) ? 0 : number;
+}
+
+function isLikelyYearValue(value) {
+  return Number.isInteger(value) && value >= 1900 && value <= 2100;
 }
 
 function formatNumber(value) {
