@@ -1030,3 +1030,63 @@ function downloadBlob(content, filename, type) {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+function compactSentence(value, maxLength = 54) {
+  const text = stringify(value);
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
+}
+
+function renderCapitalPlan() {
+  const projects = state.projects;
+  const alerts = getAlertProjects();
+  const healthyRate = projects.length ? Math.round(((projects.length - alerts.length) / projects.length) * 100) : 0;
+
+  els.capitalTotalPlan.textContent = formatNumber(sum(projects, "plan"));
+  els.capitalSlowCount.textContent = alerts.length;
+  els.capitalHealthyRate.textContent = `${healthyRate}%`;
+
+  els.capitalRows.innerHTML = projects.length ? projects.map((project) => {
+    const disbursementRate = deriveDisbursementRate(project);
+    const planShare = Math.min(100, Math.round((toNumber(project.plan) / Math.max(toNumber(project.budget), 1)) * 100)) || 0;
+    const stateClass = statusClass(project.evaluation || project.status);
+
+    return `
+      <tr>
+        <td><span class="capital-stt">${project.stt}</span></td>
+        <td>
+          <div class="capital-project">
+            <strong>${escapeHtml(project.name)}</strong>
+            <div class="capital-project-meta">
+              <span class="group-pill">Nhom ${deriveProjectGroup(project)}</span>
+              <span>${escapeHtml(project.status || "Dang cap nhat")}</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="capital-money">
+            <strong>${formatNumber(project.budget)}</strong>
+            <span>Tong muc dau tu</span>
+          </div>
+        </td>
+        <td>
+          <div class="capital-money highlight">
+            <strong>${formatNumber(project.plan)}</strong>
+            <span>${planShare}% tong muc dau tu</span>
+          </div>
+        </td>
+        <td>
+          <div class="capital-progress ${stateClass}">
+            <div class="capital-progress-head">
+              <strong>${disbursementRate}%</strong>
+              <span>${escapeHtml(compactSentence(project.disbursement || "Dang cap nhat"))}</span>
+            </div>
+            <div class="capital-progress-bar">
+              <span style="width:${disbursementRate}%"></span>
+            </div>
+          </div>
+        </td>
+        <td><span class="project-status ${stateClass}">${escapeHtml(project.evaluation || project.status)}</span></td>
+      </tr>
+    `;
+  }).join("") : `<tr><td colspan="6">Chua co du lieu ke hoach von. Hay nhap du lieu tu file Excel.</td></tr>`;
+}
