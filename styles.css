@@ -930,6 +930,32 @@ textarea:focus {
   min-width: 190px;
 }
 
+.master-actions .filter-select {
+  min-height: 42px;
+  min-width: 176px;
+  border-radius: 12px;
+  padding: 0 40px 0 14px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1;
+  box-shadow: 0 8px 20px rgba(15,23,42,.035);
+}
+
+.master-actions .filter-select:first-child {
+  min-width: 205px;
+}
+
+.master-actions .filter-select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+
 .master-table {
   min-width: 1120px;
   width: 100%;

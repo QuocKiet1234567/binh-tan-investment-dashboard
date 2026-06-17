@@ -52,6 +52,7 @@ const els = {};
 
 document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
+  normalizeStaticLabels();
   bindEvents();
   await initSupabase();
 
@@ -83,6 +84,16 @@ function cacheElements() {
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
+}
+
+function normalizeStaticLabels() {
+  const projectsNav = document.querySelector('.nav-item[data-view="projectsView"]');
+  if (projectsNav) {
+    const icon = projectsNav.querySelector(".icon");
+    projectsNav.textContent = "";
+    if (icon) projectsNav.append(icon);
+    projectsNav.append(document.createTextNode("Danh mục dự án"));
+  }
 }
 
 function bindEvents() {
@@ -199,7 +210,7 @@ function switchView(viewId) {
   const titleMap = {
     dashboardView: ["Bảng điều khiển tổng quan", ""],
     importView: ["Nhập & phân tích file", "Đọc Excel phụ lục và Word thuyết minh để tạo dữ liệu báo cáo."],
-    projectsView: ["Danh mục dự án Master", "Bảng quản lý chính của toàn bộ dự án."],
+    projectsView: ["Danh mục dự án", "Bảng quản lý chính của toàn bộ dự án."],
     reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."],
     projectDetailView: ["Chi tiết hồ sơ dự án", ""],
     capitalView: ["Kế hoạch vốn", "Theo dõi kế hoạch vốn, giải ngân và điều chỉnh trong kỳ."],
