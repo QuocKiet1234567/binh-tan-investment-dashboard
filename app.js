@@ -1,5 +1,11 @@
 const STORAGE_KEY = "bt_project_dashboard_data";
 const AUTH_KEY = "bt_project_dashboard_auth";
+const SUPABASE_URL = "https://anfttfidxjghbcoyjmhy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_AlYPyUMWW26OO1KOWqyH4Q_xNMyzO35";
+const REMOTE_STATE_ID = "main";
+
+let supabaseClient = null;
+let currentSession = null;
 
 const state = {
   projects: [],
@@ -43,14 +49,16 @@ const demoProjects = [
 
 const els = {};
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
   bindEvents();
-  restoreState();
+  await initSupabase();
 
-  if (getSavedAuth()) {
+  if (currentSession) {
+    await restoreState();
     showApp();
   } else {
+    restoreStateFromLocal();
     showLogin();
   }
 });
@@ -1264,4 +1272,183 @@ function renderCharts() {
     <div class="chart-note"><strong>Giai ngan uoc tinh:</strong> ${formatNumber(totalDisbursedTop)} ty dong</div>
     <div class="chart-note"><strong>Du an dung dau:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 64) : "Dang cap nhat")}</div>
   `;
+}
+
+async function initSupabase() {
+  if (!window.supabase?.createClient) {
+    console.warn("Supabase client is not available.");
+    return;
+  }
+
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true
+    }
+  });
+
+  const { data } = await supabaseClient.auth.getSession();
+  currentSession = data.session;
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const email = els.loginUser.value.trim();
+  const password = els.loginPass.value.trim();
+
+  if (!email || !password) {
+    els.loginError.textContent = "Vui long nhap email va mat khau.";
+    return;
+  }
+
+  if (!supabaseClient) {
+    els.loginError.textContent = "Chua ket noi duoc Supabase. Kiem tra internet roi thu lai.";
+    return;
+  }
+
+  els.loginError.textContent = "Dang dang nhap...";
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    els.loginError.textContent = "Dang nhap khong thanh cong. Kiem tra email/mat khau trong Supabase.";
+    return;
+  }
+
+  currentSession = data.session;
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ user: email, role: "admin", loginAt: new Date().toISOString() }));
+  await restoreState();
+  els.loginError.textContent = "";
+  showApp();
+}
+
+async function handleLogout() {
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut();
+  }
+
+  currentSession = null;
+  localStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem(AUTH_KEY);
+  els.loginPass.value = "";
+  showLogin();
+}
+
+function getSavedAuth() {
+  return currentSession || localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY);
+}
+
+async function restoreState() {
+  if (supabaseClient && currentSession) {
+    const { data, error } = await supabaseClient
+      .from("dashboard_state")
+      .select("data")
+      .eq("id", REMOTE_STATE_ID)
+      .maybeSingle();
+
+    const localState = readLocalState();
+    const remoteState = data?.data;
+
+    if (!error && hasUsefulState(remoteState)) {
+      applySavedState(remoteState);
+      persistStateLocal();
+      return;
+    }
+
+    if (hasUsefulState(localState)) {
+      applySavedState(localState);
+      await saveRemoteState();
+      return;
+    }
+
+    if (!error && remoteState) {
+      applySavedState(remoteState);
+      persistStateLocal();
+      return;
+    }
+
+    console.warn("Could not load Supabase state, falling back to local cache.", error);
+  }
+
+  restoreStateFromLocal();
+}
+
+function restoreStateFromLocal() {
+  const saved = readLocalState();
+  if (!saved) {
+    state.projects = [];
+    state.reportText = "";
+    state.files = [];
+    normalizeProjectNumbers();
+    return;
+  }
+
+  applySavedState(saved);
+}
+
+function readLocalState() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return null;
+  }
+}
+
+function hasUsefulState(saved) {
+  return Boolean(saved && (
+    saved.projects?.length ||
+    saved.reportText ||
+    saved.files?.length
+  ));
+}
+
+function applySavedState(saved) {
+  state.projects = saved.projects || [];
+  state.reportText = saved.reportText || "";
+  state.files = saved.files || [];
+  els.reportText.value = state.reportText;
+  normalizeProjectNumbers();
+}
+
+function persistState() {
+  persistStateLocal();
+  saveRemoteState();
+}
+
+function persistStateLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()));
+}
+
+function getSerializableState() {
+  return {
+    projects: state.projects,
+    reportText: state.reportText,
+    files: state.files
+  };
+}
+
+async function saveRemoteState() {
+  if (!supabaseClient || !currentSession) return;
+
+  const { error } = await supabaseClient
+    .from("dashboard_state")
+    .upsert({
+      id: REMOTE_STATE_ID,
+      data: getSerializableState(),
+      updated_at: new Date().toISOString(),
+      updated_by: currentSession.user.id
+    }, { onConflict: "id" });
+
+  if (error) {
+    console.warn("Could not save dashboard state to Supabase.", error);
+  }
+}
+
+function renderSettings() {
+  els.settingProjectCount.textContent = state.projects.length;
+  els.settingStorageStatus.textContent = currentSession
+    ? `Dang dong bo ${state.projects.length} du an len Supabase.`
+    : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
 }
