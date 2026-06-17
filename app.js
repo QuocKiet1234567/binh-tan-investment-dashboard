@@ -779,7 +779,7 @@ function exportCsv() {
   if (window.XLSX) {
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Phu luc du an");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Phụ lục dự án");
     XLSX.writeFile(workbook, "phu-luc-du-an-binh-tan.xlsx");
     return;
   }
@@ -1078,27 +1078,27 @@ function renderCapitalPlan() {
             <strong>${escapeHtml(project.name)}</strong>
             <div class="capital-project-meta">
               <span class="group-pill">Nhom ${deriveProjectGroup(project)}</span>
-              <span>${escapeHtml(project.status || "Dang cap nhat")}</span>
+              <span>${escapeHtml(project.status || "Đang cập nhật")}</span>
             </div>
           </div>
         </td>
         <td>
           <div class="capital-money">
             <strong>${formatNumber(project.budget)}</strong>
-            <span>Tong muc dau tu</span>
+            <span>Tổng mức đầu tư</span>
           </div>
         </td>
         <td>
           <div class="capital-money highlight">
             <strong>${formatNumber(project.plan)}</strong>
-            <span>${planShare}% tong muc dau tu</span>
+            <span>${planShare}% tổng mức đầu tư</span>
           </div>
         </td>
         <td>
           <div class="capital-progress ${stateClass}">
             <div class="capital-progress-head">
               <strong>${disbursementRate}%</strong>
-              <span>${escapeHtml(compactSentence(project.disbursement || "Dang cap nhat"))}</span>
+              <span>${escapeHtml(compactSentence(project.disbursement || "Đang cập nhật"))}</span>
             </div>
             <div class="capital-progress-bar">
               <span style="width:${disbursementRate}%"></span>
@@ -1108,15 +1108,15 @@ function renderCapitalPlan() {
         <td><span class="project-status ${stateClass}">${escapeHtml(project.evaluation || project.status)}</span></td>
       </tr>
     `;
-  }).join("") : `<tr><td colspan="6">Chua co du lieu ke hoach von. Hay nhap du lieu tu file Excel.</td></tr>`;
+  }).join("") : `<tr><td colspan="6">Chưa có dữ liệu kế hoạch vốn. Hãy nhập dữ liệu từ file Excel.</td></tr>`;
 }
 
 function buildStatusBuckets(projects) {
   const buckets = [
-    { key: "good", label: "Dam bao tien do", color: "#2563eb", value: 0 },
-    { key: "active", label: "Dang trien khai", color: "#16a34a", value: 0 },
-    { key: "done", label: "Hoan thanh", color: "#0f766e", value: 0 },
-    { key: "risk", label: "Can xu ly", color: "#dc2626", value: 0 }
+    { key: "good", label: "Đảm bảo tiến độ", color: "#2563eb", value: 0 },
+    { key: "active", label: "Đang triển khai", color: "#16a34a", value: 0 },
+    { key: "done", label: "Hoàn thành", color: "#0f766e", value: 0 },
+    { key: "risk", label: "Cần xử lý", color: "#dc2626", value: 0 }
   ];
 
   projects.forEach((project) => {
@@ -1165,13 +1165,35 @@ function renderCharts() {
     }
   };
 
+  const barValuePlugin = {
+    id: "barValuePlugin",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#334155";
+      ctx.font = "800 10px Inter, system-ui, sans-serif";
+
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        chart.getDatasetMeta(datasetIndex).data.forEach((bar, index) => {
+          const value = dataset.data[index];
+          if (!value) return;
+          ctx.fillText(`${formatNumber(value)} tỷ`, bar.x + 6, bar.y);
+        });
+      });
+
+      ctx.restore();
+    }
+  };
+
   if (state.charts.status) state.charts.status.destroy();
   if (state.charts.budget) state.charts.budget.destroy();
 
   state.charts.status = new Chart(document.getElementById("statusChart"), {
     type: "doughnut",
     data: {
-      labels: labels.length ? labels : ["Chua co du lieu"],
+      labels: labels.length ? labels : ["Chưa có dữ liệu"],
       datasets: [{
         data: values.length ? values : [1],
         backgroundColor: colors.length ? colors : ["#cbd5e1"],
@@ -1185,7 +1207,7 @@ function renderCharts() {
       plugins: {
         centerTextPlugin: {
           title: `${state.projects.length}`,
-          subtitle: "du an"
+          subtitle: "dự án"
         },
         legend: {
           position: "bottom",
@@ -1196,7 +1218,7 @@ function renderCharts() {
             label: (item) => {
               const total = values.reduce((sum, value) => sum + value, 0) || 1;
               const percent = Math.round((item.raw / total) * 100);
-              return ` ${item.label}: ${item.raw} du an (${percent}%)`;
+              return ` ${item.label}: ${item.raw} dự án (${percent}%)`;
             }
           }
         }
@@ -1209,9 +1231,9 @@ function renderCharts() {
   state.charts.budget = new Chart(document.getElementById("budgetChart"), {
     type: "bar",
     data: {
-      labels: top.length ? top.map((project) => shortProjectName(project.name)) : ["Chua co du lieu"],
+      labels: top.length ? top.map((project, index) => `${index + 1}. ${compactSentence(project.name, 28)}`) : ["Chưa có dữ liệu"],
       datasets: [{
-        label: "Ke hoach von",
+        label: "Kế hoạch vốn",
         data: top.length ? top.map((project) => toNumber(project.plan)) : [0],
         backgroundColor: "#2563eb",
         borderColor: "#1d4ed8",
@@ -1219,7 +1241,7 @@ function renderCharts() {
         borderRadius: 6,
         barThickness: 12
       }, {
-        label: "Giai ngan uoc tinh",
+        label: "Giải ngân ước tính",
         data: top.length ? top.map((project) => Math.round(toNumber(project.plan) * deriveDisbursementRate(project) / 100)) : [0],
         backgroundColor: "#93c5fd",
         borderColor: "#60a5fa",
@@ -1241,13 +1263,17 @@ function renderCharts() {
         tooltip: {
           callbacks: {
             title: (items) => top[items[0].dataIndex]?.name || "",
-            label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} ty dong`
+            label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} tỷ đồng`
           }
         }
+      },
+      layout: {
+        padding: { right: 52 }
       },
       scales: {
         x: {
           beginAtZero: true,
+          grace: "14%",
           grid: { color: "#edf2f7" },
           ticks: {
             font: { size: 10 },
@@ -1259,7 +1285,8 @@ function renderCharts() {
           ticks: { font: { size: 10, weight: "700" } }
         }
       }
-    }
+    },
+    plugins: [barValuePlugin]
   });
 
   els.statusSummary.innerHTML = statusBuckets.map((item) => {
@@ -1268,8 +1295,8 @@ function renderCharts() {
       <div class="chart-stat">
         <span class="chart-dot" style="background:${item.color}"></span>
         <div>
-          <strong>${item.value} du an</strong>
-          <em>${item.label} ${percent}%</em>
+          <strong>${item.value} dự án</strong>
+          <em>${item.label}: ${percent}%</em>
         </div>
       </div>
     `;
@@ -1280,9 +1307,22 @@ function renderCharts() {
   const leadProject = top[0];
 
   els.budgetSummary.innerHTML = `
-    <div class="chart-note"><strong>Top 6 ke hoach von:</strong> ${formatNumber(totalPlannedTop)} ty dong</div>
-    <div class="chart-note"><strong>Giai ngan uoc tinh:</strong> ${formatNumber(totalDisbursedTop)} ty dong</div>
-    <div class="chart-note"><strong>Du an dung dau:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 64) : "Dang cap nhat")}</div>
+    <div class="chart-note chart-note-strong"><strong>Tổng kế hoạch vốn top 6:</strong> ${formatNumber(totalPlannedTop)} tỷ đồng</div>
+    <div class="chart-note chart-note-strong"><strong>Giải ngân ước tính:</strong> ${formatNumber(totalDisbursedTop)} tỷ đồng</div>
+    <div class="chart-project-list">
+      ${top.map((project, index) => {
+        const plan = toNumber(project.plan);
+        const disbursed = Math.round(plan * deriveDisbursementRate(project) / 100);
+        return `
+          <div class="chart-project-row">
+            <span>${index + 1}</span>
+            <strong>${escapeHtml(compactSentence(project.name, 58))}</strong>
+            <em>Kế hoạch ${formatNumber(plan)} tỷ · Giải ngân ${formatNumber(disbursed)} tỷ</em>
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <div class="chart-note"><strong>Dự án dẫn đầu:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 72) : "Đang cập nhật")}</div>
   `;
 }
 
@@ -1318,11 +1358,11 @@ async function handleLogin(event) {
     return;
   }
 
-  els.loginError.textContent = "Dang dang nhap...";
+  els.loginError.textContent = "Đang đăng nhập...";
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
   if (error) {
-    els.loginError.textContent = "Dang nhap khong thanh cong. Kiem tra email/mat khau trong Supabase.";
+    els.loginError.textContent = "Đăng nhập không thành công. Kiểm tra email/mật khẩu trong Supabase.";
     return;
   }
 
@@ -1455,15 +1495,15 @@ async function saveRemoteState() {
 function renderSettings() {
   els.settingProjectCount.textContent = state.projects.length;
   els.settingStorageStatus.textContent = currentSession
-    ? `Dang dong bo ${state.projects.length} du an len Supabase.`
-    : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
+    ? `Đang đồng bộ ${state.projects.length} dự án lên Supabase.`
+    : `Đang lưu tạm ${state.projects.length} dự án trên trình duyệt này.`;
 }
 
 async function handleFiles(files) {
   if (!files.length) return;
 
-  addLog(`Da nhan ${files.length} file. Dang phan tich va luu file goc...`);
-  els.analysisStatus.textContent = "Dang phan tich";
+  addLog(`Đã nhận ${files.length} file. Đang phân tích và lưu file gốc...`);
+  els.analysisStatus.textContent = "Đang phân tích";
 
   const parsedProjects = [];
 
@@ -1480,11 +1520,11 @@ async function handleFiles(files) {
       const uploaded = await uploadSourceFile(file);
       Object.assign(fileRecord, uploaded);
       if (uploaded.storagePath) {
-        addLog(`Da luu file goc "${file.name}" len Supabase Storage.`);
+        addLog(`Đã lưu file gốc "${file.name}" lên Supabase Storage.`);
       }
     } catch (error) {
       fileRecord.storageError = error.message || String(error);
-      addLog(`Chua luu duoc file goc "${file.name}" len Storage: ${fileRecord.storageError}`);
+      addLog(`Chưa lưu được file gốc "${file.name}" lên Storage: ${fileRecord.storageError}`);
     }
 
     state.files.push(fileRecord);
@@ -1494,18 +1534,18 @@ async function handleFiles(files) {
         const rows = await readExcel(file);
         const projects = extractProjectsFromRows(rows);
         parsedProjects.push(...projects);
-        addLog(`Excel "${file.name}": doc ${rows.length} dong, nhan dien ${projects.length} du an.`);
+        addLog(`Excel "${file.name}": đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
       } else if (name.endsWith(".docx")) {
         const text = await readDocx(file);
         state.reportText = cleanText(text);
         els.reportText.value = state.reportText;
-        els.docStatus.textContent = `Da doc ${Math.round(state.reportText.length / 1000)}k ky tu tu Word`;
-        addLog(`Word "${file.name}": trich xuat ${state.reportText.length.toLocaleString("vi-VN")} ky tu thuyet minh.`);
+        els.docStatus.textContent = `Đã đọc ${Math.round(state.reportText.length / 1000)}k ký tự từ Word`;
+        addLog(`Word "${file.name}": trích xuất ${state.reportText.length.toLocaleString("vi-VN")} ký tự thuyết minh.`);
       } else {
-        addLog(`Bo qua "${file.name}" vi chua ho tro dinh dang nay.`);
+        addLog(`Bỏ qua "${file.name}" vì chưa hỗ trợ định dạng này.`);
       }
     } catch (error) {
-      addLog(`Khong doc duoc "${file.name}": ${error.message || error}`);
+      addLog(`Không đọc được "${file.name}": ${error.message || error}`);
     }
   }
 
@@ -1514,7 +1554,7 @@ async function handleFiles(files) {
     normalizeProjectNumbers();
   }
 
-  els.analysisStatus.textContent = state.projects.length ? "Da phan tich xong" : "Chua co bang du an";
+  els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
   els.fileInput.value = "";
   persistState();
   renderAll();
@@ -1559,19 +1599,19 @@ function renderSettings() {
   const storedFiles = state.files.filter((file) => file.storagePath).length;
   els.settingProjectCount.textContent = state.projects.length;
   els.settingStorageStatus.textContent = currentSession
-    ? `Supabase dang luu ${state.projects.length} du an va ${storedFiles}/${state.files.length} file goc.`
-    : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
+    ? `Supabase đang lưu ${state.projects.length} dự án và ${storedFiles}/${state.files.length} file gốc.`
+    : `Đang lưu tạm ${state.projects.length} dự án trên trình duyệt này.`;
 }
 
 async function clearData() {
-  if (!confirm("Xoa toan bo du lieu da phan tich? File goc tren Storage van duoc giu lai de doi chieu.")) return;
+  if (!confirm("Xóa toàn bộ dữ liệu đã phân tích? File gốc trên Storage vẫn được giữ lại để đối chiếu.")) return;
 
   state.projects = [];
   state.reportText = "";
   state.files = [];
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
-  els.analysisStatus.textContent = "Chua co du lieu";
+  els.analysisStatus.textContent = "Chưa có dữ liệu";
   els.docStatus.textContent = "Chua upload Word";
   persistStateLocal();
   await saveRemoteState();
