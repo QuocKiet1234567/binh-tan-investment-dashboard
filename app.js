@@ -277,8 +277,7 @@ async function handleFiles(files) {
       if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
         const rows = await readExcel(file);
         const projects = extractProjectsFromRows(rows);
-        parsedProjects.push(...projects);
-        recordImportHistory({
+        const source = recordImportHistory({
           type: "Excel",
           name: file.name,
           rowCount: rows.length,
@@ -287,6 +286,7 @@ async function handleFiles(files) {
           storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
           storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : ""
         });
+        parsedProjects.push(...markProjectsWithSource(projects, source.id, "Excel"));
         addLog(`Excel "${file.name}": đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
       } else if (name.endsWith(".docx")) {
         const text = await readDocx(file);
@@ -318,7 +318,8 @@ async function handleFiles(files) {
 
   els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
   els.fileInput.value = "";
-  persistState();
+  persistStateLocal();
+  await saveRemoteState();
   renderAll();
   switchView("dashboardView");
 }
@@ -2734,6 +2735,436 @@ function renderCharts() {
   });
 }
 
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  addLog(`Da nhan ${files.length} file. Dang phan tich va luu file goc...`);
+  els.analysisStatus.textContent = "Dang phan tich";
+
+  const parsedProjects = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    const fileRecord = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      importedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(fileRecord, await uploadSourceFile(file));
+      if (fileRecord.storagePath) addLog(`Da luu file goc "${file.name}" len Supabase Storage.`);
+    } catch (error) {
+      fileRecord.storageError = error.message || String(error);
+      addLog(`Chua luu duoc file goc "${file.name}" len Storage: ${fileRecord.storageError}`);
+    }
+
+    state.files.push(fileRecord);
+
+    try {
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const rows = await readExcel(file);
+        const projects = extractProjectsFromRows(rows);
+        const source = recordImportHistory({
+          type: "Excel",
+          name: file.name,
+          rowCount: rows.length,
+          projectCount: projects.length,
+          status: projects.length ? "Da phan tich" : "Khong nhan dien du an",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        parsedProjects.push(...markProjectsWithSource(projects, source.id, "Excel"));
+        addLog(`Excel "${file.name}": doc ${rows.length} dong, nhan dien ${projects.length} du an.`);
+      } else if (name.endsWith(".docx")) {
+        const text = await readDocx(file);
+        state.reportText = cleanText(text);
+        els.reportText.value = state.reportText;
+        els.docStatus.textContent = `Da doc ${Math.round(state.reportText.length / 1000)}k ky tu tu Word`;
+        recordImportHistory({
+          type: "Word",
+          name: file.name,
+          rowCount: Math.round(state.reportText.length / 1000),
+          projectCount: 0,
+          status: "Da trich thuyet minh",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        addLog(`Word "${file.name}": trich xuat ${state.reportText.length.toLocaleString("vi-VN")} ky tu thuyet minh.`);
+      } else {
+        addLog(`Bo qua "${file.name}" vi chua ho tro dinh dang nay.`);
+      }
+    } catch (error) {
+      recordImportHistory({
+        type: name.endsWith(".docx") ? "Word" : "File",
+        name: file.name,
+        rowCount: 0,
+        projectCount: 0,
+        status: "Loi phan tich",
+        storageStatus: fileRecord.storageStatus || "",
+        storagePath: fileRecord.storagePath || "",
+        error: error.message || String(error)
+      });
+      addLog(`Khong doc duoc "${file.name}": ${error.message || error}`);
+    }
+  }
+
+  if (parsedProjects.length) {
+    state.projects = mergeProjects(parsedProjects);
+    normalizeProjectNumbers();
+  }
+
+  els.analysisStatus.textContent = state.projects.length ? "Da phan tich xong" : "Chua co bang du an";
+  els.fileInput.value = "";
+  persistStateLocal();
+  await saveRemoteState();
+  renderAll();
+  switchView("dashboardView");
+}
+
+async function deleteImportHistory(id) {
+  const index = state.importHistory.findIndex((item) => item.id === id);
+  const item = state.importHistory[index];
+  if (index < 0 || !item) return;
+
+  const trackedCount = state.projects.filter((project) => project.sourceIds?.includes(id)).length;
+  const hasAnyTrackedProject = state.projects.some((project) => Array.isArray(project.sourceIds) && project.sourceIds.length);
+  const shouldFallbackRemoveAllProjects = !trackedCount && !hasAnyTrackedProject && item.projectCount > 0 && state.projects.length;
+  const hasStoredFile = Boolean(item.storagePath);
+  const message = trackedCount
+    ? `Xoa nguon "${item.name}" va ${trackedCount} du an nhap tu nguon nay?`
+    : shouldFallbackRemoveAllProjects
+      ? `Nguon "${item.name}" duoc nhap bang ban cu nen chua co ma nguon rieng. Xoa lich su va go toan bo ${state.projects.length} du an dang hien thi khoi dashboard?`
+      : `Xoa lich su "${item.name}"?`;
+
+  if (!confirm(message)) return;
+
+  if (hasStoredFile) {
+    await removeStoredAsset(item);
+    state.files = state.files.filter((file) => file.storagePath !== item.storagePath);
+  }
+
+  if (trackedCount) {
+    state.projects = state.projects
+      .map((project) => {
+        if (!Array.isArray(project.sourceIds)) return project;
+        return {
+          ...project,
+          sourceIds: project.sourceIds.filter((sourceId) => sourceId !== id)
+        };
+      })
+      .filter((project) => !Array.isArray(project.sourceIds) || project.sourceIds.length);
+    normalizeProjectNumbers();
+  } else if (shouldFallbackRemoveAllProjects) {
+    state.projects = [];
+  }
+
+  state.importHistory.splice(index, 1);
+  persistStateLocal();
+  await saveRemoteState();
+  renderAll();
+
+  const activeView = document.querySelector(".view.active")?.id;
+  if (activeView === "projectDetailView" && !state.projects[state.selectedProjectId]) {
+    switchView("dashboardView");
+  }
+}
+
+function createImportRecord(entry) {
+  return {
+    id: entry.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    importedAt: entry.importedAt || new Date().toISOString(),
+    type: entry.type || "Nguồn dữ liệu",
+    name: entry.name || "Chưa đặt tên",
+    url: entry.url || "",
+    rowCount: Number(entry.rowCount) || 0,
+    projectCount: Number(entry.projectCount) || 0,
+    status: entry.status || "Đã ghi nhận",
+    storageStatus: entry.storageStatus || "",
+    storagePath: entry.storagePath || "",
+    error: entry.error || ""
+  };
+}
+
+function recordImportHistory(entry) {
+  state.importHistory = Array.isArray(state.importHistory) ? state.importHistory : [];
+  const record = createImportRecord(entry);
+  state.importHistory.unshift(record);
+  state.importHistory = state.importHistory.slice(0, 30);
+  return record;
+}
+
+function markProjectsWithSource(projects, sourceId, sourceType) {
+  return projects.map((project) => ({
+    ...project,
+    sourceIds: Array.from(new Set([...(project.sourceIds || []), sourceId])),
+    sourceType: sourceType || project.sourceType || ""
+  }));
+}
+
+function mergeProjects(incoming) {
+  const map = new Map();
+  [...state.projects, ...incoming].forEach((project) => {
+    const key = normalizeText(project.name);
+    const existing = map.get(key) || {};
+    map.set(key, {
+      ...existing,
+      ...project,
+      sourceIds: Array.from(new Set([...(existing.sourceIds || []), ...(project.sourceIds || [])]))
+    });
+  });
+  return [...map.values()];
+}
+
+async function handleGoogleSheetSync() {
+  const rawUrl = els.sheetUrlInput?.value.trim();
+  if (!rawUrl) {
+    addLog("Chưa nhập link Google Sheet.");
+    return;
+  }
+
+  const button = els.syncSheetBtn;
+  const oldText = button?.textContent;
+
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Đang đồng bộ...";
+    }
+
+    const csvUrl = buildGoogleSheetCsvUrl(rawUrl);
+    addLog("Đang lấy dữ liệu từ Google Sheet...");
+    const response = await fetch(`/api/google-sheet?url=${encodeURIComponent(csvUrl)}`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || "Không lấy được dữ liệu Google Sheet.");
+
+    const rows = readRowsFromCsvText(text);
+    const projects = extractProjectsFromRows(rows);
+    const source = recordImportHistory({
+      type: "Google Sheet",
+      name: compactSentence(rawUrl, 92),
+      url: rawUrl,
+      rowCount: rows.length,
+      projectCount: projects.length,
+      status: projects.length ? "Đã đồng bộ" : "Không nhận diện dự án",
+      storageStatus: "linked"
+    });
+
+    if (projects.length) {
+      state.projects = mergeProjects(markProjectsWithSource(projects, source.id, "Google Sheet"));
+      normalizeProjectNumbers();
+    }
+
+    addLog(`Google Sheet: đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
+    els.analysisStatus.textContent = projects.length ? "Đã đồng bộ Google Sheet" : "Sheet chưa có bảng dự án phù hợp";
+    persistStateLocal();
+    await saveRemoteState();
+    renderAll();
+    switchView("dashboardView");
+  } catch (error) {
+    recordImportHistory({
+      type: "Google Sheet",
+      name: compactSentence(rawUrl, 92),
+      url: rawUrl,
+      rowCount: 0,
+      projectCount: 0,
+      status: "Lỗi đồng bộ",
+      error: error.message || String(error)
+    });
+    addLog(`Không đồng bộ được Google Sheet: ${error.message || error}`);
+    persistStateLocal();
+    await saveRemoteState();
+    renderAll();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = oldText || "Đồng bộ Sheet";
+    }
+  }
+}
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  addLog(`Đã nhận ${files.length} file. Đang phân tích và lưu file gốc...`);
+  els.analysisStatus.textContent = "Đang phân tích";
+
+  const parsedProjects = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    const fileRecord = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      importedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(fileRecord, await uploadSourceFile(file));
+      if (fileRecord.storagePath) addLog(`Đã lưu file gốc "${file.name}" lên Supabase Storage.`);
+    } catch (error) {
+      fileRecord.storageError = error.message || String(error);
+      addLog(`Chưa lưu được file gốc "${file.name}" lên Storage: ${fileRecord.storageError}`);
+    }
+
+    state.files.push(fileRecord);
+
+    try {
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const rows = await readExcel(file);
+        const projects = extractProjectsFromRows(rows);
+        const source = recordImportHistory({
+          type: "Excel",
+          name: file.name,
+          rowCount: rows.length,
+          projectCount: projects.length,
+          status: projects.length ? "Đã phân tích" : "Không nhận diện dự án",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        parsedProjects.push(...markProjectsWithSource(projects, source.id, "Excel"));
+        addLog(`Excel "${file.name}": đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
+      } else if (name.endsWith(".docx")) {
+        const text = await readDocx(file);
+        state.reportText = cleanText(text);
+        els.reportText.value = state.reportText;
+        els.docStatus.textContent = `Đã đọc ${Math.round(state.reportText.length / 1000)}k ký tự từ Word`;
+        recordImportHistory({
+          type: "Word",
+          name: file.name,
+          rowCount: Math.round(state.reportText.length / 1000),
+          projectCount: 0,
+          status: "Đã trích thuyết minh",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        addLog(`Word "${file.name}": trích xuất ${state.reportText.length.toLocaleString("vi-VN")} ký tự thuyết minh.`);
+      } else {
+        addLog(`Bỏ qua "${file.name}" vì chưa hỗ trợ định dạng này.`);
+      }
+    } catch (error) {
+      recordImportHistory({
+        type: name.endsWith(".docx") ? "Word" : "File",
+        name: file.name,
+        rowCount: 0,
+        projectCount: 0,
+        status: "Lỗi phân tích",
+        storageStatus: fileRecord.storageStatus || "",
+        storagePath: fileRecord.storagePath || "",
+        error: error.message || String(error)
+      });
+      addLog(`Không đọc được "${file.name}": ${error.message || error}`);
+    }
+  }
+
+  if (parsedProjects.length) {
+    state.projects = mergeProjects(parsedProjects);
+    normalizeProjectNumbers();
+  }
+
+  els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
+  els.fileInput.value = "";
+  persistState();
+  renderAll();
+  switchView("dashboardView");
+}
+
+function renderSourceHistory() {
+  if (!els.sourceHistory || !els.historySummary) return;
+
+  const rows = Array.isArray(state.importHistory) ? state.importHistory : [];
+  els.historySummary.textContent = rows.length
+    ? `${rows.length} lần thêm dữ liệu gần nhất`
+    : "Chưa có lịch sử";
+
+  if (!rows.length) {
+    els.sourceHistory.innerHTML = `
+      <div class="history-empty">
+        <strong>Chưa có nguồn dữ liệu nào</strong>
+        <span>Upload Excel/Word hoặc đồng bộ Google Sheet để hệ thống ghi lại lịch sử.</span>
+      </div>
+    `;
+    return;
+  }
+
+  els.sourceHistory.innerHTML = rows.map((item) => {
+    const isError = normalizeText(item.status).includes("loi") || item.error;
+    const statusClassName = isError ? "is-error" : "is-ok";
+    const sourceLink = item.url
+      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Mở nguồn</a>`
+      : "";
+
+    return `
+      <div class="history-item">
+        <div class="history-type">${escapeHtml(item.type)}</div>
+        <div class="history-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${formatDateTimeLabel(item.importedAt)} · ${formatNumber(item.rowCount)} dòng · ${formatNumber(item.projectCount)} dự án</span>
+          ${item.error ? `<em>${escapeHtml(item.error)}</em>` : ""}
+        </div>
+        <div class="history-actions">
+          <span class="history-status ${statusClassName}">${escapeHtml(item.status)}</span>
+          ${sourceLink}
+          <button class="history-delete" data-history-delete="${escapeHtml(item.id)}" type="button">Xóa</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  els.sourceHistory.querySelectorAll("[data-history-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteImportHistory(button.dataset.historyDelete));
+  });
+}
+
+async function deleteImportHistory(id) {
+  const index = state.importHistory.findIndex((item) => item.id === id);
+  const item = state.importHistory[index];
+  if (index < 0 || !item) return;
+
+  const trackedCount = state.projects.filter((project) => project.sourceIds?.includes(id)).length;
+  const hasAnyTrackedProject = state.projects.some((project) => Array.isArray(project.sourceIds) && project.sourceIds.length);
+  const shouldFallbackRemoveAllProjects = !trackedCount && !hasAnyTrackedProject && item.projectCount > 0 && state.projects.length;
+  const hasStoredFile = Boolean(item.storagePath);
+  const message = trackedCount
+    ? `Xóa nguồn "${item.name}" và ${trackedCount} dự án nhập từ nguồn này?`
+    : shouldFallbackRemoveAllProjects
+      ? `Nguồn "${item.name}" được nhập bằng bản cũ nên chưa có mã nguồn riêng. Xóa lịch sử và gỡ toàn bộ ${state.projects.length} dự án đang hiển thị khỏi dashboard?`
+      : `Xóa lịch sử "${item.name}"?`;
+  if (!confirm(message)) return;
+
+  if (hasStoredFile) {
+    await removeStoredAsset(item);
+    state.files = state.files.filter((file) => file.storagePath !== item.storagePath);
+  }
+
+  if (trackedCount) {
+    state.projects = state.projects
+      .map((project) => {
+        if (!Array.isArray(project.sourceIds)) return project;
+        return {
+          ...project,
+          sourceIds: project.sourceIds.filter((sourceId) => sourceId !== id)
+        };
+      })
+      .filter((project) => !Array.isArray(project.sourceIds) || project.sourceIds.length);
+    normalizeProjectNumbers();
+  } else if (shouldFallbackRemoveAllProjects) {
+    state.projects = [];
+  }
+
+  state.importHistory.splice(index, 1);
+  persistStateLocal();
+  await saveRemoteState();
+  renderAll();
+
+  const activeView = document.querySelector(".view.active")?.id;
+  if (activeView === "projectDetailView" && !state.projects[state.selectedProjectId]) {
+    switchView("dashboardView");
+  }
+}
+
 function renderSourceHistory() {
   if (!els.sourceHistory || !els.historySummary) return;
 
@@ -2802,6 +3233,54 @@ async function deleteImportHistory(id) {
   await saveRemoteState();
   renderSourceHistory();
   renderSettings();
+}
+
+async function deleteImportHistory(id) {
+  const index = state.importHistory.findIndex((item) => item.id === id);
+  const item = state.importHistory[index];
+  if (index < 0 || !item) return;
+
+  const trackedCount = state.projects.filter((project) => project.sourceIds?.includes(id)).length;
+  const hasAnyTrackedProject = state.projects.some((project) => Array.isArray(project.sourceIds) && project.sourceIds.length);
+  const shouldFallbackRemoveAllProjects = !trackedCount && !hasAnyTrackedProject && item.projectCount > 0 && state.projects.length;
+  const hasStoredFile = Boolean(item.storagePath);
+  const message = trackedCount
+    ? `Xoa nguon "${item.name}" va ${trackedCount} du an nhap tu nguon nay?`
+    : shouldFallbackRemoveAllProjects
+      ? `Nguon "${item.name}" duoc nhap bang ban cu nen chua co ma nguon rieng. Xoa lich su va go toan bo ${state.projects.length} du an dang hien thi khoi dashboard?`
+      : `Xoa lich su "${item.name}"?`;
+
+  if (!confirm(message)) return;
+
+  if (hasStoredFile) {
+    await removeStoredAsset(item);
+    state.files = state.files.filter((file) => file.storagePath !== item.storagePath);
+  }
+
+  if (trackedCount) {
+    state.projects = state.projects
+      .map((project) => {
+        if (!Array.isArray(project.sourceIds)) return project;
+        return {
+          ...project,
+          sourceIds: project.sourceIds.filter((sourceId) => sourceId !== id)
+        };
+      })
+      .filter((project) => !Array.isArray(project.sourceIds) || project.sourceIds.length);
+    normalizeProjectNumbers();
+  } else if (shouldFallbackRemoveAllProjects) {
+    state.projects = [];
+  }
+
+  state.importHistory.splice(index, 1);
+  persistStateLocal();
+  await saveRemoteState();
+  renderAll();
+
+  const activeView = document.querySelector(".view.active")?.id;
+  if (activeView === "projectDetailView" && !state.projects[state.selectedProjectId]) {
+    switchView("dashboardView");
+  }
 }
 
 function renderCharts() {
@@ -3087,6 +3566,94 @@ async function handleFiles(files) {
   els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
   els.fileInput.value = "";
   persistState();
+  renderAll();
+  switchView("dashboardView");
+}
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  addLog(`Da nhan ${files.length} file. Dang phan tich va luu file goc...`);
+  els.analysisStatus.textContent = "Dang phan tich";
+
+  const parsedProjects = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    const fileRecord = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      importedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(fileRecord, await uploadSourceFile(file));
+      if (fileRecord.storagePath) addLog(`Da luu file goc "${file.name}" len Supabase Storage.`);
+    } catch (error) {
+      fileRecord.storageError = error.message || String(error);
+      addLog(`Chua luu duoc file goc "${file.name}" len Storage: ${fileRecord.storageError}`);
+    }
+
+    state.files.push(fileRecord);
+
+    try {
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const rows = await readExcel(file);
+        const projects = extractProjectsFromRows(rows);
+        const source = recordImportHistory({
+          type: "Excel",
+          name: file.name,
+          rowCount: rows.length,
+          projectCount: projects.length,
+          status: projects.length ? "Da phan tich" : "Khong nhan dien du an",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        parsedProjects.push(...markProjectsWithSource(projects, source.id, "Excel"));
+        addLog(`Excel "${file.name}": doc ${rows.length} dong, nhan dien ${projects.length} du an.`);
+      } else if (name.endsWith(".docx")) {
+        const text = await readDocx(file);
+        state.reportText = cleanText(text);
+        els.reportText.value = state.reportText;
+        els.docStatus.textContent = `Da doc ${Math.round(state.reportText.length / 1000)}k ky tu tu Word`;
+        recordImportHistory({
+          type: "Word",
+          name: file.name,
+          rowCount: Math.round(state.reportText.length / 1000),
+          projectCount: 0,
+          status: "Da trich thuyet minh",
+          storageStatus: fileRecord.storageStatus || "",
+          storagePath: fileRecord.storagePath || ""
+        });
+        addLog(`Word "${file.name}": trich xuat ${state.reportText.length.toLocaleString("vi-VN")} ky tu thuyet minh.`);
+      } else {
+        addLog(`Bo qua "${file.name}" vi chua ho tro dinh dang nay.`);
+      }
+    } catch (error) {
+      recordImportHistory({
+        type: name.endsWith(".docx") ? "Word" : "File",
+        name: file.name,
+        rowCount: 0,
+        projectCount: 0,
+        status: "Loi phan tich",
+        storageStatus: fileRecord.storageStatus || "",
+        storagePath: fileRecord.storagePath || "",
+        error: error.message || String(error)
+      });
+      addLog(`Khong doc duoc "${file.name}": ${error.message || error}`);
+    }
+  }
+
+  if (parsedProjects.length) {
+    state.projects = mergeProjects(parsedProjects);
+    normalizeProjectNumbers();
+  }
+
+  els.analysisStatus.textContent = state.projects.length ? "Da phan tich xong" : "Chua co bang du an";
+  els.fileInput.value = "";
+  persistStateLocal();
+  await saveRemoteState();
   renderAll();
   switchView("dashboardView");
 }
