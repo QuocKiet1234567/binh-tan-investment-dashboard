@@ -2734,6 +2734,276 @@ function renderCharts() {
   });
 }
 
+function renderSourceHistory() {
+  if (!els.sourceHistory || !els.historySummary) return;
+
+  const rows = Array.isArray(state.importHistory) ? state.importHistory : [];
+  els.historySummary.textContent = rows.length
+    ? `${rows.length} lần thêm dữ liệu gần nhất`
+    : "Chưa có lịch sử";
+
+  if (!rows.length) {
+    els.sourceHistory.innerHTML = `
+      <div class="history-empty">
+        <strong>Chưa có nguồn dữ liệu nào</strong>
+        <span>Upload Excel/Word hoặc đồng bộ Google Sheet để hệ thống ghi lại lịch sử.</span>
+      </div>
+    `;
+    return;
+  }
+
+  els.sourceHistory.innerHTML = rows.map((item) => {
+    const isError = normalizeText(item.status).includes("loi") || item.error;
+    const statusClassName = isError ? "is-error" : "is-ok";
+    const sourceLink = item.url
+      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Mở nguồn</a>`
+      : "";
+
+    return `
+      <div class="history-item">
+        <div class="history-type">${escapeHtml(item.type)}</div>
+        <div class="history-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${formatDateTimeLabel(item.importedAt)} · ${formatNumber(item.rowCount)} dòng · ${formatNumber(item.projectCount)} dự án</span>
+          ${item.error ? `<em>${escapeHtml(item.error)}</em>` : ""}
+        </div>
+        <div class="history-actions">
+          <span class="history-status ${statusClassName}">${escapeHtml(item.status)}</span>
+          ${sourceLink}
+          <button class="history-delete" data-history-delete="${escapeHtml(item.id)}" type="button">Xóa</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  els.sourceHistory.querySelectorAll("[data-history-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteImportHistory(button.dataset.historyDelete));
+  });
+}
+
+async function deleteImportHistory(id) {
+  const index = state.importHistory.findIndex((item) => item.id === id);
+  const item = state.importHistory[index];
+  if (index < 0 || !item) return;
+
+  const hasStoredFile = Boolean(item.storagePath);
+  const message = hasStoredFile
+    ? `Xóa lịch sử "${item.name}" và file gốc đã lưu trên Storage? Dữ liệu dự án đã nhập sẽ không tự hoàn tác.`
+    : `Xóa lịch sử "${item.name}"? Dữ liệu dự án đã nhập sẽ không tự hoàn tác.`;
+  if (!confirm(message)) return;
+
+  if (hasStoredFile) {
+    await removeStoredAsset(item);
+    state.files = state.files.filter((file) => file.storagePath !== item.storagePath);
+  }
+
+  state.importHistory.splice(index, 1);
+  persistStateLocal();
+  await saveRemoteState();
+  renderSourceHistory();
+  renderSettings();
+}
+
+function renderCharts() {
+  const hasProjects = state.projects.length > 0;
+  const statusBuckets = buildStatusBuckets(state.projects);
+  const labels = statusBuckets.map((item) => item.label);
+  const values = statusBuckets.map((item) => item.value);
+  const colors = statusBuckets.map((item) => item.color);
+  const top = [...state.projects]
+    .sort((a, b) => toNumber(b.plan) - toNumber(a.plan))
+    .slice(0, 10);
+
+  const centerTextPlugin = {
+    id: "centerTextPlugin",
+    afterDraw(chart, args, options) {
+      if (!options || !chart?.getDatasetMeta(0)?.data?.length) return;
+      const { ctx } = chart;
+      const point = chart.getDatasetMeta(0).data[0];
+      if (!point) return;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 28px Inter, system-ui, sans-serif";
+      ctx.fillText(options.title || "", point.x, point.y - 10);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "700 12px Inter, system-ui, sans-serif";
+      ctx.fillText(options.subtitle || "", point.x, point.y + 16);
+      ctx.restore();
+    }
+  };
+
+  const emptyChartPlugin = {
+    id: "emptyChartPlugin",
+    afterDraw(chart, args, options) {
+      if (!options?.show) return;
+      const { ctx, chartArea } = chart;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#64748b";
+      ctx.font = "800 13px Inter, system-ui, sans-serif";
+      ctx.fillText("Chưa có dữ liệu kế hoạch vốn", (chartArea.left + chartArea.right) / 2, (chartArea.top + chartArea.bottom) / 2 - 6);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "700 11px Inter, system-ui, sans-serif";
+      ctx.fillText("Upload Excel hoặc đồng bộ Google Sheet để hiển thị biểu đồ", (chartArea.left + chartArea.right) / 2, (chartArea.top + chartArea.bottom) / 2 + 14);
+      ctx.restore();
+    }
+  };
+
+  const compactBarValuePlugin = {
+    id: "compactBarValuePlugin",
+    afterDatasetsDraw(chart) {
+      if (!top.length) return;
+      const { ctx } = chart;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 9px Inter, system-ui, sans-serif";
+      chart.getDatasetMeta(0).data.forEach((bar, index) => {
+        const value = chart.data.datasets[0].data[index];
+        if (!value || !bar || bar.y < 18) return;
+        ctx.fillText(`${formatNumber(value)}`, bar.x, bar.y - 5);
+      });
+      ctx.restore();
+    }
+  };
+
+  if (state.charts.status) state.charts.status.destroy();
+  if (state.charts.budget) state.charts.budget.destroy();
+
+  state.charts.status = new Chart(document.getElementById("statusChart"), {
+    type: "doughnut",
+    data: {
+      labels: labels.length ? labels : ["Chưa có dữ liệu"],
+      datasets: [{
+        data: values.length ? values : [1],
+        backgroundColor: colors.length ? colors : ["#cbd5e1"],
+        borderColor: "#ffffff",
+        borderWidth: 5,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        centerTextPlugin: { title: `${state.projects.length}`, subtitle: "dự án" },
+        legend: {
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 14, font: { size: 11, weight: "700" } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const total = values.reduce((sum, value) => sum + value, 0) || 1;
+              const percent = Math.round((item.raw / total) * 100);
+              return ` ${item.label}: ${item.raw} dự án (${percent}%)`;
+            }
+          }
+        }
+      },
+      cutout: "70%"
+    },
+    plugins: [centerTextPlugin]
+  });
+
+  state.charts.budget = new Chart(document.getElementById("budgetChart"), {
+    type: "bar",
+    data: {
+      labels: top.length ? top.map((project, index) => `${index + 1}`) : [],
+      datasets: [{
+        label: "Kế hoạch vốn",
+        data: top.length ? top.map((project) => toNumber(project.plan)) : [],
+        backgroundColor: "#2563eb",
+        borderColor: "#1d4ed8",
+        borderWidth: 1,
+        borderRadius: 7,
+        maxBarThickness: 22
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        const item = elements?.[0];
+        if (!item || !top[item.index]) return;
+        openProjectDetail(state.projects.indexOf(top[item.index]));
+      },
+      plugins: {
+        legend: { display: false },
+        emptyChartPlugin: { show: !top.length },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex]?.name || "",
+            label: (item) => ` Kế hoạch vốn: ${formatNumber(item.raw)} tỷ đồng`,
+            afterBody: () => "Bấm cột để mở chi tiết dự án"
+          }
+        }
+      },
+      layout: { padding: { top: 14, right: 8 } },
+      scales: {
+        x: {
+          display: hasProjects,
+          grid: { display: false },
+          ticks: { font: { size: 10, weight: "800" } },
+          title: { display: hasProjects, text: "Thứ tự dự án trong danh sách bên dưới", color: "#64748b", font: { size: 10, weight: "700" } }
+        },
+        y: {
+          display: hasProjects,
+          beginAtZero: true,
+          grace: "18%",
+          grid: { color: "#edf2f7" },
+          ticks: { font: { size: 10 }, callback: (value) => formatNumber(value) },
+          title: { display: hasProjects, text: "Tỷ đồng", color: "#64748b", font: { size: 10, weight: "700" } }
+        }
+      }
+    },
+    plugins: [compactBarValuePlugin, emptyChartPlugin]
+  });
+
+  els.statusSummary.innerHTML = statusBuckets.map((item) => {
+    const percent = state.projects.length ? Math.round((item.value / state.projects.length) * 100) : 0;
+    return `
+      <div class="chart-stat">
+        <span class="chart-dot" style="background:${item.color}"></span>
+        <div>
+          <strong>${item.value} dự án</strong>
+          <em>${item.label}: ${percent}%</em>
+        </div>
+      </div>
+    `;
+  }).join("") || `
+    <div class="chart-note"><strong>Chưa có dữ liệu</strong> Upload Excel hoặc đồng bộ Google Sheet để phân loại dự án.</div>
+  `;
+
+  const totalPlannedTop = top.reduce((sum, project) => sum + toNumber(project.plan), 0);
+  const leadProject = top[0];
+  els.budgetSummary.innerHTML = top.length ? `
+    <div class="chart-note chart-note-strong"><strong>Top ${top.length} kế hoạch vốn:</strong> ${formatNumber(totalPlannedTop)} tỷ đồng</div>
+    <div class="chart-project-list">
+      ${top.map((project, index) => {
+        const plan = toNumber(project.plan);
+        const projectIndex = state.projects.indexOf(project);
+        return `
+          <div class="chart-project-row" data-chart-detail="${projectIndex}">
+            <span>${index + 1}</span>
+            <strong title="${escapeHtml(project.name)}">${escapeHtml(compactSentence(project.name, 64))}</strong>
+            <em>${formatNumber(plan)} tỷ</em>
+            <button type="button">Mở</button>
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <div class="chart-note"><strong>Dự án dẫn đầu:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 76) : "Đang cập nhật")}</div>
+  ` : `
+    <div class="chart-note"><strong>Chưa có danh sách dự án</strong> Dữ liệu sẽ xuất hiện tại đây sau khi nhập Excel hoặc Google Sheet.</div>
+  `;
+
+  els.budgetSummary.querySelectorAll("[data-chart-detail]").forEach((row) => {
+    row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
+  });
+}
+
 async function handleFiles(files) {
   if (!files.length) return;
 

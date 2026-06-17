@@ -686,6 +686,12 @@ textarea:focus {
   margin-top: 18px;
 }
 
+.chart-grid .panel + .panel,
+.import-grid .panel + .panel,
+.report-layout .panel + .panel {
+  margin-top: 0;
+}
+
 .panel-head {
   margin-bottom: 12px;
   display: flex;
@@ -1056,6 +1062,24 @@ textarea:focus {
   background: #eff6ff;
   color: #1d4ed8;
   text-decoration: none;
+}
+
+.history-delete {
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #dc2626;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.history-delete:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }
 
 .log-line {
