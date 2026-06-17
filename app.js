@@ -1,5 +1,7 @@
 const STORAGE_KEY = "bt_project_dashboard_data";
 const AUTH_KEY = "bt_project_dashboard_auth";
+const SYNC_META_KEY = "bt_project_dashboard_sync";
+const CONFLICT_BACKUP_KEY = "bt_project_dashboard_conflict_backup";
 const SUPABASE_URL = "https://anfttfidxjghbcoyjmhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AlYPyUMWW26OO1KOWqyH4Q_xNMyzO35";
 const REMOTE_STATE_ID = "main";
@@ -7,6 +9,9 @@ const SOURCE_FILE_BUCKET = "source-files";
 
 let supabaseClient = null;
 let currentSession = null;
+let remoteStateUpdatedAt = null;
+let remoteSaveQueue = Promise.resolve(true);
+let remoteConflictNotified = false;
 
 const state = {
   projects: [],
@@ -1249,7 +1254,6 @@ function recordImportHistory(entry) {
     storagePath: entry.storagePath || "",
     error: entry.error || ""
   });
-  state.importHistory = state.importHistory.slice(0, 30);
 }
 
 function renderSourceHistory() {
@@ -1605,6 +1609,8 @@ async function handleLogin(event) {
   }
 
   currentSession = data.session;
+  remoteStateUpdatedAt = null;
+  remoteConflictNotified = false;
   localStorage.setItem(AUTH_KEY, JSON.stringify({ user: email, role: "admin", loginAt: new Date().toISOString() }));
   await restoreState();
   els.loginError.textContent = "";
@@ -1617,6 +1623,9 @@ async function handleLogout() {
   }
 
   currentSession = null;
+  remoteStateUpdatedAt = null;
+  remoteConflictNotified = false;
+  remoteSaveQueue = Promise.resolve(true);
   localStorage.removeItem(AUTH_KEY);
   sessionStorage.removeItem(AUTH_KEY);
   els.loginPass.value = "";
@@ -1631,20 +1640,42 @@ async function restoreState() {
   if (supabaseClient && currentSession) {
     const { data, error } = await supabaseClient
       .from("dashboard_state")
-      .select("data")
+      .select("data, updated_at")
       .eq("id", REMOTE_STATE_ID)
       .maybeSingle();
 
     const localState = readLocalState();
+    const syncMeta = readSyncMeta();
     const remoteState = data?.data;
 
     if (!error && data) {
+      remoteStateUpdatedAt = data.updated_at || null;
+      remoteConflictNotified = false;
+
+      if (syncMeta?.pending && hasUsefulState(localState)) {
+        if (!syncMeta.baseUpdatedAt || syncMeta.baseUpdatedAt === remoteStateUpdatedAt) {
+          applySavedState(localState);
+          const recovered = await saveRemoteState();
+          if (recovered) return;
+          return;
+        } else {
+          localStorage.setItem(CONFLICT_BACKUP_KEY, JSON.stringify({
+            savedAt: new Date().toISOString(),
+            baseUpdatedAt: syncMeta.baseUpdatedAt,
+            remoteUpdatedAt: remoteStateUpdatedAt,
+            data: localState
+          }));
+          alert("Có dữ liệu chưa đồng bộ trên trình duyệt nhưng Supabase đã có bản mới hơn. Hệ thống ưu tiên bản trên Supabase và đã giữ một bản sao xung đột trong trình duyệt để tránh mất dữ liệu.");
+        }
+      }
+
       applySavedState(remoteState);
-      persistStateLocal();
+      persistStateLocal(false);
       return;
     }
 
     if (!error && !data && hasUsefulState(localState)) {
+      remoteStateUpdatedAt = null;
       applySavedState(localState);
       await saveRemoteState();
       return;
@@ -1704,8 +1735,29 @@ function persistState() {
   saveRemoteState();
 }
 
-function persistStateLocal() {
+function persistStateLocal(markPending = true) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()));
+  localStorage.setItem(SYNC_META_KEY, JSON.stringify({
+    pending: markPending,
+    baseUpdatedAt: remoteStateUpdatedAt,
+    changedAt: new Date().toISOString()
+  }));
+}
+
+function readSyncMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(SYNC_META_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function markLocalStateSynced(updatedAt) {
+  localStorage.setItem(SYNC_META_KEY, JSON.stringify({
+    pending: false,
+    baseUpdatedAt: updatedAt || null,
+    changedAt: new Date().toISOString()
+  }));
 }
 
 function getSerializableState() {
@@ -2891,7 +2943,6 @@ function recordImportHistory(entry) {
   state.importHistory = Array.isArray(state.importHistory) ? state.importHistory : [];
   const record = createImportRecord(entry);
   state.importHistory.unshift(record);
-  state.importHistory = state.importHistory.slice(0, 30);
   return record;
 }
 
@@ -3679,21 +3730,72 @@ async function syncStateFromRemote() {
 async function saveRemoteState() {
   if (!supabaseClient || !currentSession) return false;
 
-  const { error } = await supabaseClient
-    .from("dashboard_state")
-    .upsert({
-      id: REMOTE_STATE_ID,
-      data: getSerializableState(),
-      updated_at: new Date().toISOString(),
-      updated_by: currentSession.user.id
-    }, { onConflict: "id" });
+  const snapshotJson = JSON.stringify(getSerializableState());
+  const snapshot = JSON.parse(snapshotJson);
+  const userId = currentSession.user.id;
 
-  if (error) {
-    console.warn("Could not save dashboard state to Supabase.", error);
-    return false;
-  }
+  remoteSaveQueue = remoteSaveQueue
+    .catch(() => false)
+    .then(async () => {
+      const nextUpdatedAt = new Date().toISOString();
+      let query;
 
-  return true;
+      if (remoteStateUpdatedAt) {
+        query = supabaseClient
+          .from("dashboard_state")
+          .update({
+            data: snapshot,
+            updated_at: nextUpdatedAt,
+            updated_by: userId
+          })
+          .eq("id", REMOTE_STATE_ID)
+          .eq("updated_at", remoteStateUpdatedAt)
+          .select("updated_at")
+          .maybeSingle();
+      } else {
+        query = supabaseClient
+          .from("dashboard_state")
+          .insert({
+            id: REMOTE_STATE_ID,
+            data: snapshot,
+            updated_at: nextUpdatedAt,
+            updated_by: userId
+          })
+          .select("updated_at")
+          .maybeSingle();
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        if (error.code === "23505") {
+          notifyRemoteConflict();
+        } else {
+          console.warn("Could not save dashboard state to Supabase.", error);
+        }
+        return false;
+      }
+
+      if (!data) {
+        notifyRemoteConflict();
+        return false;
+      }
+
+      remoteStateUpdatedAt = data.updated_at || nextUpdatedAt;
+      remoteConflictNotified = false;
+      if (JSON.stringify(getSerializableState()) === snapshotJson) {
+        markLocalStateSynced(remoteStateUpdatedAt);
+      }
+      return true;
+    });
+
+  return remoteSaveQueue;
+}
+
+function notifyRemoteConflict() {
+  if (remoteConflictNotified) return;
+  remoteConflictNotified = true;
+  alert("Dữ liệu trên Supabase vừa được thay đổi từ tab hoặc thiết bị khác. Hệ thống đã dừng ghi đè để bảo vệ dữ liệu. Hãy tải lại trang trước khi tiếp tục chỉnh sửa.");
 }
 
 function getActiveProjectForAssets() {

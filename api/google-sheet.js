@@ -14,11 +14,16 @@ export default async function handler(request, response) {
     return;
   }
 
-  const allowedHost = url.hostname.endsWith("google.com") || url.hostname.endsWith("googleusercontent.com");
-  const looksLikeCsv = url.pathname.toLowerCase().endsWith(".csv") || url.search.toLowerCase().includes("csv");
+  const hostname = url.hostname.toLowerCase();
+  const allowedHosts = [
+    "docs.google.com",
+    "drive.google.com",
+    "sheets.google.com"
+  ];
+  const allowedHost = allowedHosts.includes(hostname) || hostname.endsWith(".googleusercontent.com");
 
-  if (!allowedHost && !looksLikeCsv) {
-    response.status(400).send("Only public Google Sheet or CSV links are supported.");
+  if (url.protocol !== "https:" || !allowedHost) {
+    response.status(400).send("Only public HTTPS Google Sheet links are supported.");
     return;
   }
 
