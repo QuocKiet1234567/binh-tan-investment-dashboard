@@ -3,6 +3,7 @@ const AUTH_KEY = "bt_project_dashboard_auth";
 const SUPABASE_URL = "https://anfttfidxjghbcoyjmhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AlYPyUMWW26OO1KOWqyH4Q_xNMyzO35";
 const REMOTE_STATE_ID = "main";
+const SOURCE_FILE_BUCKET = "source-files";
 
 let supabaseClient = null;
 let currentSession = null;
@@ -1450,5 +1451,109 @@ function renderSettings() {
   els.settingProjectCount.textContent = state.projects.length;
   els.settingStorageStatus.textContent = currentSession
     ? `Dang dong bo ${state.projects.length} du an len Supabase.`
+    : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
+}
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  addLog(`Da nhan ${files.length} file. Dang phan tich va luu file goc...`);
+  els.analysisStatus.textContent = "Dang phan tich";
+
+  const parsedProjects = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    const fileRecord = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      importedAt: new Date().toISOString()
+    };
+
+    try {
+      const uploaded = await uploadSourceFile(file);
+      Object.assign(fileRecord, uploaded);
+      if (uploaded.storagePath) {
+        addLog(`Da luu file goc "${file.name}" len Supabase Storage.`);
+      }
+    } catch (error) {
+      fileRecord.storageError = error.message || String(error);
+      addLog(`Chua luu duoc file goc "${file.name}" len Storage: ${fileRecord.storageError}`);
+    }
+
+    state.files.push(fileRecord);
+
+    try {
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const rows = await readExcel(file);
+        const projects = extractProjectsFromRows(rows);
+        parsedProjects.push(...projects);
+        addLog(`Excel "${file.name}": doc ${rows.length} dong, nhan dien ${projects.length} du an.`);
+      } else if (name.endsWith(".docx")) {
+        const text = await readDocx(file);
+        state.reportText = cleanText(text);
+        els.reportText.value = state.reportText;
+        els.docStatus.textContent = `Da doc ${Math.round(state.reportText.length / 1000)}k ky tu tu Word`;
+        addLog(`Word "${file.name}": trich xuat ${state.reportText.length.toLocaleString("vi-VN")} ky tu thuyet minh.`);
+      } else {
+        addLog(`Bo qua "${file.name}" vi chua ho tro dinh dang nay.`);
+      }
+    } catch (error) {
+      addLog(`Khong doc duoc "${file.name}": ${error.message || error}`);
+    }
+  }
+
+  if (parsedProjects.length) {
+    state.projects = mergeProjects(parsedProjects);
+    normalizeProjectNumbers();
+  }
+
+  els.analysisStatus.textContent = state.projects.length ? "Da phan tich xong" : "Chua co bang du an";
+  els.fileInput.value = "";
+  persistState();
+  renderAll();
+  switchView("dashboardView");
+}
+
+async function uploadSourceFile(file) {
+  if (!supabaseClient || !currentSession) {
+    return { storageBucket: null, storagePath: null, storageStatus: "local-only" };
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  const path = `${currentSession.user.id}/${date}/${Date.now()}-${safeStorageFileName(file.name)}`;
+  const { data, error } = await supabaseClient.storage
+    .from(SOURCE_FILE_BUCKET)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream"
+    });
+
+  if (error) throw error;
+
+  return {
+    storageBucket: SOURCE_FILE_BUCKET,
+    storagePath: data.path,
+    storageStatus: "stored"
+  };
+}
+
+function safeStorageFileName(name) {
+  const fallback = "source-file";
+  return stringify(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 140) || fallback;
+}
+
+function renderSettings() {
+  const storedFiles = state.files.filter((file) => file.storagePath).length;
+  els.settingProjectCount.textContent = state.projects.length;
+  els.settingStorageStatus.textContent = currentSession
+    ? `Supabase dang luu ${state.projects.length} du an va ${storedFiles}/${state.files.length} file goc.`
     : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
 }
