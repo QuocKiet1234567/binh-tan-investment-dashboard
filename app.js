@@ -1349,21 +1349,15 @@ async function restoreState() {
     const localState = readLocalState();
     const remoteState = data?.data;
 
-    if (!error && hasUsefulState(remoteState)) {
+    if (!error && data) {
       applySavedState(remoteState);
       persistStateLocal();
       return;
     }
 
-    if (hasUsefulState(localState)) {
+    if (!error && !data && hasUsefulState(localState)) {
       applySavedState(localState);
       await saveRemoteState();
-      return;
-    }
-
-    if (!error && remoteState) {
-      applySavedState(remoteState);
-      persistStateLocal();
       return;
     }
 
@@ -1557,3 +1551,26 @@ function renderSettings() {
     ? `Supabase dang luu ${state.projects.length} du an va ${storedFiles}/${state.files.length} file goc.`
     : `Dang luu tam ${state.projects.length} du an tren trinh duyet nay.`;
 }
+
+async function clearData() {
+  if (!confirm("Xoa toan bo du lieu da phan tich? File goc tren Storage van duoc giu lai de doi chieu.")) return;
+
+  state.projects = [];
+  state.reportText = "";
+  state.files = [];
+  els.reportText.value = "";
+  els.analysisLog.innerHTML = "";
+  els.analysisStatus.textContent = "Chua co du lieu";
+  els.docStatus.textContent = "Chua upload Word";
+  persistStateLocal();
+  await saveRemoteState();
+  renderAll();
+}
+
+async function syncStateFromRemote() {
+  if (!currentSession || document.hidden) return;
+  await restoreState();
+  renderAll();
+}
+
+window.addEventListener("focus", syncStateFromRemote);
