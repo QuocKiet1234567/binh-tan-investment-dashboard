@@ -2097,3 +2097,434 @@ function formatDateLabel(value) {
   if (!value) return "Đang cập nhật";
   return new Date(value).toLocaleDateString("vi-VN");
 }
+
+function chartLabelLines(text, limit = 20) {
+  const words = String(text || "Đang cập nhật").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+
+  words.forEach((word) => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > limit && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+function openPhotoLightbox(url, title) {
+  if (!url) return;
+  let lightbox = document.getElementById("photoLightbox");
+  if (!lightbox) {
+    lightbox = document.createElement("div");
+    lightbox.id = "photoLightbox";
+    lightbox.className = "photo-lightbox hidden";
+    lightbox.innerHTML = `
+      <div class="photo-lightbox-inner">
+        <div class="photo-lightbox-head">
+          <strong class="photo-lightbox-title"></strong>
+          <button class="photo-lightbox-close" type="button">Đóng</button>
+        </div>
+        <img alt="">
+      </div>
+    `;
+    document.body.append(lightbox);
+    lightbox.addEventListener("click", (event) => {
+      if (event.target === lightbox || event.target.classList.contains("photo-lightbox-close")) {
+        lightbox.classList.add("hidden");
+      }
+    });
+  }
+
+  lightbox.querySelector("img").src = url;
+  lightbox.querySelector("img").alt = title || "Ảnh hiện trường";
+  lightbox.querySelector(".photo-lightbox-title").textContent = title || "Ảnh hiện trường";
+  lightbox.classList.remove("hidden");
+}
+
+async function renderProjectPhotos(project) {
+  const grid = document.getElementById("detailPhotoGrid");
+  if (!grid) return;
+
+  project.photos = Array.isArray(project.photos) ? project.photos : [];
+  const photos = project.photos;
+  const rows = await Promise.all([0, 1].map(async (slot) => {
+    const slottedIndex = photos.findIndex((photo) => Number(photo?.photoSlot) === slot);
+    const photoIndex = slottedIndex >= 0 ? slottedIndex : slot;
+    const photo = photos[photoIndex] || null;
+
+    if (!photo) {
+      return `
+        <button class="site-photo-empty site-photo-upload" data-photo-slot="${slot}" type="button">
+          <strong>Ảnh thi công ${slot + 1}</strong>
+          <span>Chèn ảnh hiện trường</span>
+        </button>
+      `;
+    }
+
+    const url = await getStoragePreviewUrl(photo.storagePath);
+    const title = `Ảnh thi công ${slot + 1}: ${photo.name || "hiện trường"}`;
+    return `
+      <figure class="site-photo-card">
+        <div class="site-photo-tools">
+          ${url ? `<button class="asset-view photo-view" data-photo-url="${url}" data-photo-title="${escapeHtml(title)}" type="button">Xem ảnh</button>` : ""}
+          <button class="photo-replace site-photo-upload" data-photo-slot="${slot}" type="button">Thay ảnh</button>
+          <button class="asset-delete photo-delete" data-asset-kind="photo" data-asset-index="${photoIndex}" type="button">Xóa</button>
+        </div>
+        ${url ? `<img src="${url}" alt="${escapeHtml(title)}">` : `<div>${escapeHtml(photo.name || "Ảnh hiện trường")}</div>`}
+        <figcaption>${escapeHtml(title)}</figcaption>
+      </figure>
+    `;
+  }));
+
+  grid.innerHTML = rows.join("");
+  grid.querySelectorAll(".site-photo-upload").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById("detailPhotoInput");
+      if (!input) return;
+      pendingProjectAssetSlot = { kind: "photo", slot: Number(button.dataset.photoSlot) };
+      input.value = "";
+      input.click();
+    });
+  });
+  grid.querySelectorAll(".photo-view").forEach((button) => {
+    button.addEventListener("click", () => openPhotoLightbox(button.dataset.photoUrl, button.dataset.photoTitle));
+  });
+  grid.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function renderProjectAttachments(project) {
+  const list = document.getElementById("detailAttachmentList");
+  const documentList = document.querySelector("#legalPane .document-list");
+  if (list) list.innerHTML = "";
+  if (!documentList) return;
+
+  const attachments = project.attachments || [];
+  const rows = await Promise.all(getProjectDocumentSlots(project).map(async (doc, slot) => {
+    const assetIndex = findAttachmentSlotIndex(attachments, slot);
+    const file = assetIndex >= 0 ? attachments[assetIndex] : null;
+    const url = file ? await getStoragePreviewUrl(file.storagePath) : "";
+    const badge = file ? assetFileLabel(file) : "PDF";
+    const meta = file
+      ? `${escapeHtml(file.name)} - ${formatFileSize(file.size)} - ${formatDateLabel(file.uploadedAt)}`
+      : escapeHtml(doc.description);
+    const viewLabel = badge === "PDF" ? "Xem PDF" : "Mở file";
+
+    return `
+      <div class="document-row">
+        <span class="document-file-badge">${badge}</span>
+        <div class="document-copy">
+          <strong>${escapeHtml(doc.title)}</strong>
+          <span>${meta}</span>
+        </div>
+        <div class="document-row-actions">
+          ${url ? `<a class="document-open asset-view" href="${url}" target="_blank" rel="noreferrer">${viewLabel}</a>` : `<button class="document-open is-disabled" type="button" disabled>${file ? "Chưa lưu" : "Xem PDF"}</button>`}
+          <button class="document-upload-btn" data-doc-slot="${slot}" type="button">${file ? "Thay file" : "Chèn file"}</button>
+          ${file ? `<button class="asset-delete" data-asset-kind="attachment" data-asset-index="${assetIndex}" type="button">Xóa</button>` : ""}
+        </div>
+      </div>
+    `;
+  }));
+
+  documentList.innerHTML = rows.join("");
+  documentList.querySelectorAll(".document-upload-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById("detailFileInput");
+      if (!input) return;
+      pendingProjectAssetSlot = { kind: "attachment", slot: Number(button.dataset.docSlot) };
+      input.value = "";
+      input.click();
+    });
+  });
+  documentList.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function handleProjectAssetFiles(files, kind) {
+  const project = state.projects[state.selectedProjectId];
+  if (!project || !files.length) return;
+
+  const collectionName = kind === "photo" ? "photos" : "attachments";
+  project[collectionName] = Array.isArray(project[collectionName]) ? project[collectionName] : [];
+  const collection = project[collectionName];
+  const selectedSlot = pendingProjectAssetSlot?.kind === kind ? pendingProjectAssetSlot.slot : null;
+  pendingProjectAssetSlot = null;
+
+  for (const file of files) {
+    const record = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      uploadedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(record, await uploadProjectAsset(file, project, kind));
+    } catch (error) {
+      record.storageError = error.message || String(error);
+    }
+
+    if (Number.isInteger(selectedSlot)) {
+      if (kind === "photo") {
+        record.photoSlot = selectedSlot;
+        let targetIndex = collection.findIndex((item) => Number(item?.photoSlot) === selectedSlot);
+        if (targetIndex < 0 && collection[selectedSlot]) targetIndex = selectedSlot;
+        if (targetIndex >= 0) {
+          await removeStoredAsset(collection[targetIndex]);
+          collection[targetIndex] = record;
+        } else {
+          collection[selectedSlot] = record;
+        }
+      } else {
+        record.docSlot = selectedSlot;
+        let targetIndex = collection.findIndex((item) => Number(item?.docSlot) === selectedSlot);
+        if (targetIndex < 0 && !collection.some((item) => item?.docSlot !== undefined && item?.docSlot !== null) && collection[selectedSlot]) {
+          targetIndex = selectedSlot;
+        }
+        if (targetIndex >= 0) {
+          await removeStoredAsset(collection[targetIndex]);
+          collection[targetIndex] = record;
+        } else {
+          collection.push(record);
+        }
+      }
+    } else {
+      collection.push(record);
+    }
+  }
+
+  persistStateLocal();
+  await saveRemoteState();
+  renderProjectDetail(project);
+}
+
+async function handleProjectAssetDelete(event) {
+  event.preventDefault();
+  const kind = event.currentTarget.dataset.assetKind;
+  const index = Number(event.currentTarget.dataset.assetIndex);
+  const project = state.projects[state.selectedProjectId];
+  const collection = kind === "photo" ? "photos" : "attachments";
+  const asset = project?.[collection]?.[index];
+
+  if (!project || !asset) return;
+  if (!confirm(`Xóa "${asset.name}" khỏi hồ sơ dự án?`)) return;
+
+  await removeStoredAsset(asset);
+  project[collection].splice(index, 1);
+  persistStateLocal();
+  await saveRemoteState();
+  renderProjectDetail(project);
+}
+
+function showDetailTab(tabId) {
+  document.querySelectorAll(".detail-tab").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tabId);
+  });
+  document.querySelectorAll(".detail-pane").forEach((pane) => {
+    pane.classList.toggle("active", pane.id === tabId);
+  });
+
+  const project = state.projects[state.selectedProjectId];
+  if (project && (tabId === "progressPane" || tabId === "legalPane")) {
+    renderProjectAssets(project);
+  }
+}
+
+function renderCharts() {
+  const statusBuckets = buildStatusBuckets(state.projects);
+  const labels = statusBuckets.map((item) => item.label);
+  const values = statusBuckets.map((item) => item.value);
+  const colors = statusBuckets.map((item) => item.color);
+  const top = [...state.projects]
+    .sort((a, b) => toNumber(b.plan) - toNumber(a.plan))
+    .slice(0, 6);
+
+  const centerTextPlugin = {
+    id: "centerTextPlugin",
+    afterDraw(chart, args, options) {
+      if (!options || !chart?.getDatasetMeta(0)?.data?.length) return;
+      const { ctx } = chart;
+      const point = chart.getDatasetMeta(0).data[0];
+      if (!point) return;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 28px Inter, system-ui, sans-serif";
+      ctx.fillText(options.title || "", point.x, point.y - 10);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "700 12px Inter, system-ui, sans-serif";
+      ctx.fillText(options.subtitle || "", point.x, point.y + 16);
+      ctx.restore();
+    }
+  };
+
+  const verticalBarValuePlugin = {
+    id: "verticalBarValuePlugin",
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 10px Inter, system-ui, sans-serif";
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        chart.getDatasetMeta(datasetIndex).data.forEach((bar, index) => {
+          const value = dataset.data[index];
+          if (!value || !bar) return;
+          ctx.fillText(`${formatNumber(value)} tỷ`, bar.x, bar.y - 6);
+        });
+      });
+      ctx.restore();
+    }
+  };
+
+  if (state.charts.status) state.charts.status.destroy();
+  if (state.charts.budget) state.charts.budget.destroy();
+
+  state.charts.status = new Chart(document.getElementById("statusChart"), {
+    type: "doughnut",
+    data: {
+      labels: labels.length ? labels : ["Chưa có dữ liệu"],
+      datasets: [{
+        data: values.length ? values : [1],
+        backgroundColor: colors.length ? colors : ["#cbd5e1"],
+        borderColor: "#ffffff",
+        borderWidth: 5,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        centerTextPlugin: { title: `${state.projects.length}`, subtitle: "dự án" },
+        legend: {
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 14, font: { size: 11, weight: "700" } }
+        },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const total = values.reduce((sum, value) => sum + value, 0) || 1;
+              const percent = Math.round((item.raw / total) * 100);
+              return ` ${item.label}: ${item.raw} dự án (${percent}%)`;
+            }
+          }
+        }
+      },
+      cutout: "70%"
+    },
+    plugins: [centerTextPlugin]
+  });
+
+  state.charts.budget = new Chart(document.getElementById("budgetChart"), {
+    type: "bar",
+    data: {
+      labels: top.length ? top.map((project, index) => [`${index + 1}.`, ...chartLabelLines(project.name, 18)]) : ["Chưa có dữ liệu"],
+      datasets: [{
+        label: "Kế hoạch vốn",
+        data: top.length ? top.map((project) => toNumber(project.plan)) : [0],
+        backgroundColor: "#2563eb",
+        borderColor: "#1d4ed8",
+        borderWidth: 1,
+        borderRadius: 8,
+        maxBarThickness: 34
+      }, {
+        label: "Giải ngân ước tính",
+        data: top.length ? top.map((project) => Math.round(toNumber(project.plan) * deriveDisbursementRate(project) / 100)) : [0],
+        backgroundColor: "#93c5fd",
+        borderColor: "#60a5fa",
+        borderWidth: 1,
+        borderRadius: 8,
+        maxBarThickness: 34
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        const item = elements?.[0];
+        if (!item || !top[item.index]) return;
+        openProjectDetail(state.projects.indexOf(top[item.index]));
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+          align: "start",
+          labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", padding: 12, font: { size: 11, weight: "700" } }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex]?.name || "",
+            label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} tỷ đồng`,
+            afterBody: () => "Bấm cột để mở chi tiết dự án"
+          }
+        }
+      },
+      layout: { padding: { top: 8, right: 8 } },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 10, weight: "700" }, maxRotation: 0, minRotation: 0 }
+        },
+        y: {
+          beginAtZero: true,
+          grace: "18%",
+          grid: { color: "#edf2f7" },
+          ticks: { font: { size: 10 }, callback: (value) => formatNumber(value) }
+        }
+      }
+    },
+    plugins: [verticalBarValuePlugin]
+  });
+
+  els.statusSummary.innerHTML = statusBuckets.map((item) => {
+    const percent = state.projects.length ? Math.round((item.value / state.projects.length) * 100) : 0;
+    return `
+      <div class="chart-stat">
+        <span class="chart-dot" style="background:${item.color}"></span>
+        <div>
+          <strong>${item.value} dự án</strong>
+          <em>${item.label}: ${percent}%</em>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const totalPlannedTop = top.reduce((sum, project) => sum + toNumber(project.plan), 0);
+  const totalDisbursedTop = top.reduce((sum, project) => sum + Math.round(toNumber(project.plan) * deriveDisbursementRate(project) / 100), 0);
+  const leadProject = top[0];
+
+  els.budgetSummary.innerHTML = `
+    <div class="chart-note chart-note-strong"><strong>Tổng kế hoạch vốn top 6:</strong> ${formatNumber(totalPlannedTop)} tỷ đồng</div>
+    <div class="chart-note chart-note-strong"><strong>Giải ngân ước tính:</strong> ${formatNumber(totalDisbursedTop)} tỷ đồng</div>
+    <div class="chart-project-list">
+      ${top.map((project, index) => {
+        const plan = toNumber(project.plan);
+        const disbursed = Math.round(plan * deriveDisbursementRate(project) / 100);
+        const projectIndex = state.projects.indexOf(project);
+        return `
+          <div class="chart-project-row" data-chart-detail="${projectIndex}">
+            <span>${index + 1}</span>
+            <strong title="${escapeHtml(project.name)}">${escapeHtml(compactSentence(project.name, 58))}</strong>
+            <em>Kế hoạch ${formatNumber(plan)} tỷ - Giải ngân ${formatNumber(disbursed)} tỷ</em>
+            <button type="button">Chi tiết</button>
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <div class="chart-note"><strong>Dự án dẫn đầu:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 72) : "Đang cập nhật")}</div>
+  `;
+
+  els.budgetSummary.querySelectorAll("[data-chart-detail]").forEach((row) => {
+    row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
+  });
+}
