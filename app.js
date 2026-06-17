@@ -1805,6 +1805,98 @@ function formatFileSize(size) {
   return `${value} B`;
 }
 
+async function renderProjectAttachments(project) {
+  const list = document.getElementById("detailAttachmentList");
+  if (!list) return;
+
+  const attachments = project.attachments || [];
+  if (!attachments.length) {
+    list.innerHTML = `
+      <div class="attachment-empty">
+        <strong>Chưa có file đính kèm</strong>
+        <span>Chèn PDF, Word hoặc Excel để hoàn thiện hồ sơ pháp lý của dự án.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const rows = await Promise.all(attachments.map(async (file, index) => {
+    const url = await getStoragePreviewUrl(file.storagePath);
+    return `
+      <div class="attachment-item">
+        <span class="attachment-icon">${assetFileLabel(file)}</span>
+        <div>
+          <strong>${escapeHtml(file.name)}</strong>
+          <em>${formatFileSize(file.size)} - ${formatDateLabel(file.uploadedAt)}${file.storagePath ? " - Đã lưu Storage" : " - Chưa lưu Storage"}</em>
+        </div>
+        <div class="asset-actions">
+          ${url ? `<a class="attachment-open" href="${url}" target="_blank" rel="noreferrer">Mở file</a>` : ""}
+          <button class="asset-delete" data-asset-kind="attachment" data-asset-index="${index}" type="button">Xóa</button>
+        </div>
+      </div>
+    `;
+  }));
+
+  list.innerHTML = rows.join("");
+  list.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function renderProjectPhotos(project) {
+  const grid = document.getElementById("detailPhotoGrid");
+  if (!grid) return;
+
+  const photos = project.photos || [];
+  if (!photos.length) {
+    grid.innerHTML = `<div>Ảnh thi công 1</div><div>Ảnh thi công 2</div>`;
+    return;
+  }
+
+  const html = await Promise.all(photos.map(async (photo, index) => {
+    const url = await getStoragePreviewUrl(photo.storagePath);
+    return `
+      <figure class="site-photo-card">
+        <button class="asset-delete photo-delete" data-asset-kind="photo" data-asset-index="${index}" type="button">Xóa</button>
+        ${url ? `<img src="${url}" alt="${escapeHtml(photo.name)}">` : `<div>${escapeHtml(photo.name)}</div>`}
+        <figcaption>${escapeHtml(compactSentence(photo.name, 38))}</figcaption>
+      </figure>
+    `;
+  }));
+
+  grid.innerHTML = html.join("");
+  grid.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function handleProjectAssetDelete(event) {
+  event.preventDefault();
+  const kind = event.currentTarget.dataset.assetKind;
+  const index = Number(event.currentTarget.dataset.assetIndex);
+  const project = state.projects[state.selectedProjectId];
+  const collection = kind === "photo" ? "photos" : "attachments";
+  const asset = project?.[collection]?.[index];
+
+  if (!project || !asset) return;
+  if (!confirm(`Xóa "${asset.name}" khỏi hồ sơ dự án?`)) return;
+
+  if (asset.storagePath && supabaseClient && currentSession) {
+    const { error } = await supabaseClient.storage
+      .from(SOURCE_FILE_BUCKET)
+      .remove([asset.storagePath]);
+
+    if (error) {
+      alert(`Không xóa được file trên Storage: ${error.message}`);
+      return;
+    }
+  }
+
+  project[collection].splice(index, 1);
+  persistState();
+  renderProjectDetail(project);
+}
+
 function formatDateLabel(value) {
   if (!value) return "Đang cập nhật";
   return new Date(value).toLocaleDateString("vi-VN");

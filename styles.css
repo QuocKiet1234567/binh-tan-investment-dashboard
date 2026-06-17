@@ -1368,6 +1368,23 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.asset-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-delete {
+  border: 1px solid #fee2e2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff7f7;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .document-list div {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1511,6 +1528,16 @@ textarea:focus {
   background: #fff;
   overflow: hidden;
   box-shadow: 0 14px 30px rgba(15,23,42,.045);
+  position: relative;
+}
+
+.photo-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 8px 18px rgba(15,23,42,.12);
 }
 
 .site-photo-card img {
