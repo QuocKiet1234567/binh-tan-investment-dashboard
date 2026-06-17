@@ -1897,6 +1897,202 @@ async function handleProjectAssetDelete(event) {
   renderProjectDetail(project);
 }
 
+let pendingProjectAssetSlot = null;
+
+function normalizeStaticLabels() {
+  const projectsNav = document.querySelector('.nav-item[data-view="projectsView"]');
+  if (projectsNav) {
+    const icon = projectsNav.querySelector(".icon");
+    projectsNav.textContent = "";
+    if (icon) projectsNav.append(icon);
+    projectsNav.append(document.createTextNode("Danh mục dự án"));
+  }
+
+  const progressPane = document.getElementById("progressPane");
+  const photoGrid = progressPane?.querySelector(".site-photos");
+  if (photoGrid && !photoGrid.id) {
+    photoGrid.id = "detailPhotoGrid";
+  }
+
+  if (progressPane && !document.getElementById("detailPhotoInput")) {
+    const input = document.createElement("input");
+    input.id = "detailPhotoInput";
+    input.type = "file";
+    input.multiple = true;
+    input.accept = "image/*";
+    input.hidden = true;
+    progressPane.append(input);
+  }
+}
+
+function getProjectDocumentSlots(project) {
+  return [
+    {
+      title: "Quyết định phê duyệt chủ trương đầu tư",
+      description: project?.legal || "Đang cập nhật hồ sơ pháp lý của dự án."
+    },
+    {
+      title: "Quyết định phê duyệt dự án/dự toán",
+      description: project?.progress || "Đang cập nhật quyết định, dự toán và các phụ lục liên quan."
+    }
+  ];
+}
+
+function findAttachmentSlotIndex(attachments, slot) {
+  const exactIndex = attachments.findIndex((file) => Number(file.docSlot) === slot);
+  if (exactIndex >= 0) return exactIndex;
+
+  const hasSlottedFiles = attachments.some((file) => file.docSlot !== undefined && file.docSlot !== null);
+  if (!hasSlottedFiles && attachments[slot]) return slot;
+  return -1;
+}
+
+async function renderProjectAttachments(project) {
+  const list = document.getElementById("detailAttachmentList");
+  const documentList = document.querySelector("#legalPane .document-list");
+  if (list) list.innerHTML = "";
+  if (!documentList) return;
+
+  const attachments = project.attachments || [];
+  const rows = await Promise.all(getProjectDocumentSlots(project).map(async (doc, slot) => {
+    const assetIndex = findAttachmentSlotIndex(attachments, slot);
+    const file = assetIndex >= 0 ? attachments[assetIndex] : null;
+    const url = file ? await getStoragePreviewUrl(file.storagePath) : "";
+    const badge = file ? assetFileLabel(file) : "PDF";
+    const meta = file
+      ? `${escapeHtml(file.name)} - ${formatFileSize(file.size)} - ${formatDateLabel(file.uploadedAt)}`
+      : escapeHtml(doc.description);
+
+    return `
+      <div class="document-row">
+        <span class="document-file-badge">${badge}</span>
+        <div class="document-copy">
+          <strong>${escapeHtml(doc.title)}</strong>
+          <span>${meta}</span>
+        </div>
+        <div class="document-row-actions">
+          ${url ? `<a class="document-open" href="${url}" target="_blank" rel="noreferrer">${badge === "PDF" ? "Xem PDF" : "Mở file"}</a>` : `<button class="document-open is-disabled" type="button" disabled>Xem PDF</button>`}
+          <button class="document-upload-btn" data-doc-slot="${slot}" type="button">${file ? "Thay file" : "Chèn file"}</button>
+          ${file ? `<button class="asset-delete" data-asset-kind="attachment" data-asset-index="${assetIndex}" type="button">Xóa</button>` : ""}
+        </div>
+      </div>
+    `;
+  }));
+
+  documentList.innerHTML = rows.join("");
+  documentList.querySelectorAll(".document-upload-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById("detailFileInput");
+      if (!input) return;
+      pendingProjectAssetSlot = { kind: "attachment", slot: Number(button.dataset.docSlot) };
+      input.value = "";
+      input.click();
+    });
+  });
+  documentList.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function renderProjectPhotos(project) {
+  const grid = document.getElementById("detailPhotoGrid");
+  if (!grid) return;
+
+  const photos = project.photos || [];
+  const rows = await Promise.all([0, 1].map(async (slot) => {
+    const photo = photos[slot] || null;
+    if (!photo) {
+      return `
+        <button class="site-photo-empty site-photo-upload" data-photo-slot="${slot}" type="button">
+          <strong>Ảnh thi công ${slot + 1}</strong>
+          <span>Chèn ảnh hiện trường</span>
+        </button>
+      `;
+    }
+
+    const url = await getStoragePreviewUrl(photo.storagePath);
+    return `
+      <figure class="site-photo-card">
+        <div class="site-photo-tools">
+          <button class="photo-replace site-photo-upload" data-photo-slot="${slot}" type="button">Thay ảnh</button>
+          <button class="asset-delete photo-delete" data-asset-kind="photo" data-asset-index="${slot}" type="button">Xóa</button>
+        </div>
+        ${url ? `<img src="${url}" alt="${escapeHtml(photo.name)}">` : `<div>${escapeHtml(photo.name)}</div>`}
+        <figcaption>Ảnh thi công ${slot + 1}: ${escapeHtml(compactSentence(photo.name, 34))}</figcaption>
+      </figure>
+    `;
+  }));
+
+  grid.innerHTML = rows.join("");
+  grid.querySelectorAll(".site-photo-upload").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById("detailPhotoInput");
+      if (!input) return;
+      pendingProjectAssetSlot = { kind: "photo", slot: Number(button.dataset.photoSlot) };
+      input.value = "";
+      input.click();
+    });
+  });
+  grid.querySelectorAll(".asset-delete").forEach((button) => {
+    button.addEventListener("click", handleProjectAssetDelete);
+  });
+}
+
+async function handleProjectAssetFiles(files, kind) {
+  const project = state.projects[state.selectedProjectId];
+  if (!project || !files.length) return;
+
+  const collectionName = kind === "photo" ? "photos" : "attachments";
+  project[collectionName] = project[collectionName] || [];
+  const collection = project[collectionName];
+  const selectedSlot = pendingProjectAssetSlot?.kind === kind ? pendingProjectAssetSlot.slot : null;
+  pendingProjectAssetSlot = null;
+
+  for (const file of files) {
+    const record = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      uploadedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(record, await uploadProjectAsset(file, project, kind));
+    } catch (error) {
+      record.storageError = error.message || String(error);
+    }
+
+    if (Number.isInteger(selectedSlot)) {
+      if (kind === "photo") {
+        if (collection[selectedSlot]) await removeStoredAsset(collection[selectedSlot]);
+        collection[selectedSlot] = record;
+      } else {
+        record.docSlot = selectedSlot;
+        let targetIndex = collection.findIndex((item) => Number(item.docSlot) === selectedSlot);
+        if (targetIndex < 0 && !collection.some((item) => item.docSlot !== undefined && item.docSlot !== null) && collection[selectedSlot]) {
+          targetIndex = selectedSlot;
+        }
+        if (targetIndex >= 0) {
+          await removeStoredAsset(collection[targetIndex]);
+          collection[targetIndex] = record;
+        } else {
+          collection.push(record);
+        }
+      }
+    } else {
+      collection.push(record);
+    }
+  }
+
+  persistState();
+  renderProjectDetail(project);
+}
+
+async function removeStoredAsset(asset) {
+  if (!asset?.storagePath || !supabaseClient || !currentSession) return;
+  await supabaseClient.storage.from(SOURCE_FILE_BUCKET).remove([asset.storagePath]);
+}
+
 function formatDateLabel(value) {
   if (!value) return "Đang cập nhật";
   return new Date(value).toLocaleDateString("vi-VN");
