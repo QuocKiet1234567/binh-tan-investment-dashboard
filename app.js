@@ -94,6 +94,27 @@ function normalizeStaticLabels() {
     if (icon) projectsNav.append(icon);
     projectsNav.append(document.createTextNode("Danh mục dự án"));
   }
+
+  const progressPane = document.getElementById("progressPane");
+  const progressLeft = progressPane?.querySelector(".progress-layout > div:first-child");
+  if (progressLeft && !document.getElementById("detailPhotoInput")) {
+    const photoUpload = document.createElement("div");
+    photoUpload.className = "detail-upload-strip compact";
+    photoUpload.innerHTML = `
+      <div>
+        <strong>Ảnh hiện trường</strong>
+        <span>Chèn ảnh thi công để báo cáo có minh chứng trực quan.</span>
+      </div>
+      <input id="detailPhotoInput" type="file" multiple accept="image/*">
+      <button id="detailPhotoBtn" class="secondary-btn" type="button">Chèn ảnh</button>
+    `;
+    progressLeft.append(photoUpload);
+  }
+
+  const photoGrid = progressPane?.querySelector(".site-photos");
+  if (photoGrid && !photoGrid.id) {
+    photoGrid.id = "detailPhotoGrid";
+  }
 }
 
 function bindEvents() {
@@ -135,6 +156,21 @@ function bindEvents() {
 
   document.querySelectorAll(".detail-tab").forEach((button) => {
     button.addEventListener("click", () => showDetailTab(button.dataset.tab));
+  });
+
+  document.getElementById("detailFileBtn")?.addEventListener("click", () => {
+    document.getElementById("detailFileInput")?.click();
+  });
+  document.getElementById("detailFileInput")?.addEventListener("change", async (event) => {
+    await handleProjectAssetFiles([...event.target.files], "attachment");
+    event.target.value = "";
+  });
+  document.getElementById("detailPhotoBtn")?.addEventListener("click", () => {
+    document.getElementById("detailPhotoInput")?.click();
+  });
+  document.getElementById("detailPhotoInput")?.addEventListener("change", async (event) => {
+    await handleProjectAssetFiles([...event.target.files], "photo");
+    event.target.value = "";
   });
 
   ["dragenter", "dragover"].forEach((name) => {
@@ -665,6 +701,7 @@ function renderProjectDetail(project) {
   els.detailContractValue.textContent = `${formatNumber(project.budget * 0.78)} tỷ`;
   els.detailProgressRate.textContent = `${progressRate}%`;
   els.detailProgressBar.style.width = `${progressRate}%`;
+  renderProjectAssets(project);
   els.detailDifficulty.textContent = project.difficulty || project.progress || "Chưa ghi nhận khó khăn lớn.";
 }
 
@@ -1625,3 +1662,150 @@ async function syncStateFromRemote() {
 }
 
 window.addEventListener("focus", syncStateFromRemote);
+
+async function handleProjectAssetFiles(files, kind) {
+  const project = state.projects[state.selectedProjectId];
+  if (!project || !files.length) return;
+
+  const collection = kind === "photo" ? "photos" : "attachments";
+  project[collection] = project[collection] || [];
+
+  for (const file of files) {
+    try {
+      const uploaded = await uploadProjectAsset(file, project, kind);
+      project[collection].push({
+        name: file.name,
+        size: file.size,
+        type: file.type || "",
+        uploadedAt: new Date().toISOString(),
+        ...uploaded
+      });
+    } catch (error) {
+      project[collection].push({
+        name: file.name,
+        size: file.size,
+        type: file.type || "",
+        uploadedAt: new Date().toISOString(),
+        storageError: error.message || String(error)
+      });
+    }
+  }
+
+  persistState();
+  renderProjectDetail(project);
+}
+
+async function uploadProjectAsset(file, project, kind) {
+  if (!supabaseClient || !currentSession) {
+    return { storageBucket: null, storagePath: null, storageStatus: "local-only" };
+  }
+
+  const projectCode = `DA-${String(project.stt || state.selectedProjectId + 1).padStart(3, "0")}`;
+  const folder = kind === "photo" ? "photos" : "attachments";
+  const path = `${currentSession.user.id}/projects/${projectCode}/${folder}/${Date.now()}-${safeStorageFileName(file.name)}`;
+  const { data, error } = await supabaseClient.storage
+    .from(SOURCE_FILE_BUCKET)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream"
+    });
+
+  if (error) throw error;
+
+  return {
+    storageBucket: SOURCE_FILE_BUCKET,
+    storagePath: data.path,
+    storageStatus: "stored"
+  };
+}
+
+async function renderProjectAssets(project) {
+  await renderProjectAttachments(project);
+  await renderProjectPhotos(project);
+}
+
+async function renderProjectAttachments(project) {
+  const list = document.getElementById("detailAttachmentList");
+  if (!list) return;
+
+  const attachments = project.attachments || [];
+  if (!attachments.length) {
+    list.innerHTML = `
+    <div class="attachment-empty">
+      <strong>Chưa có file đính kèm</strong>
+      <span>Chèn PDF, Word hoặc Excel để hoàn thiện hồ sơ pháp lý của dự án.</span>
+    </div>
+  `;
+    return;
+  }
+
+  const rows = await Promise.all(attachments.map(async (file) => {
+    const url = await getStoragePreviewUrl(file.storagePath);
+    return `
+      <div class="attachment-item">
+        <span class="attachment-icon">${assetFileLabel(file)}</span>
+        <div>
+          <strong>${escapeHtml(file.name)}</strong>
+          <em>${formatFileSize(file.size)} · ${formatDateLabel(file.uploadedAt)}${file.storagePath ? " · Đã lưu Storage" : " · Chưa lưu Storage"}</em>
+        </div>
+        ${url ? `<a class="attachment-open" href="${url}" target="_blank" rel="noreferrer">Mở file</a>` : ""}
+      </div>
+    `;
+  }));
+
+  list.innerHTML = rows.join("");
+}
+
+async function renderProjectPhotos(project) {
+  const grid = document.getElementById("detailPhotoGrid");
+  if (!grid) return;
+
+  const photos = project.photos || [];
+  if (!photos.length) {
+    grid.innerHTML = `<div>Ảnh thi công 1</div><div>Ảnh thi công 2</div>`;
+    return;
+  }
+
+  const html = await Promise.all(photos.map(async (photo) => {
+    const url = await getStoragePreviewUrl(photo.storagePath);
+    return `
+      <figure class="site-photo-card">
+        ${url ? `<img src="${url}" alt="${escapeHtml(photo.name)}">` : `<div>${escapeHtml(photo.name)}</div>`}
+        <figcaption>${escapeHtml(compactSentence(photo.name, 38))}</figcaption>
+      </figure>
+    `;
+  }));
+
+  grid.innerHTML = html.join("");
+}
+
+async function getStoragePreviewUrl(path) {
+  if (!path || !supabaseClient) return "";
+
+  const { data, error } = await supabaseClient.storage
+    .from(SOURCE_FILE_BUCKET)
+    .createSignedUrl(path, 60 * 30);
+
+  return error ? "" : data.signedUrl;
+}
+
+function assetFileLabel(file) {
+  const name = normalizeText(file.name);
+  if (name.endsWith(".pdf")) return "PDF";
+  if (name.endsWith(".doc") || name.endsWith(".docx")) return "DOC";
+  if (name.endsWith(".xls") || name.endsWith(".xlsx")) return "XLS";
+  return "FILE";
+}
+
+function formatFileSize(size) {
+  const value = Number(size) || 0;
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+function formatDateLabel(value) {
+  if (!value) return "Đang cập nhật";
+  return new Date(value).toLocaleDateString("vi-VN");
+}
