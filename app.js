@@ -2528,3 +2528,237 @@ function renderCharts() {
     row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
   });
 }
+
+let projectAssetMutationInProgress = false;
+let pendingProjectAssetResetTimer = null;
+
+async function syncStateFromRemote() {
+  if (!currentSession || document.hidden) return;
+
+  if (projectAssetMutationInProgress || pendingProjectAssetSlot) {
+    clearTimeout(pendingProjectAssetResetTimer);
+    pendingProjectAssetResetTimer = setTimeout(() => {
+      if (!projectAssetMutationInProgress) pendingProjectAssetSlot = null;
+    }, 1800);
+    return;
+  }
+
+  await restoreState();
+  renderAll();
+}
+
+async function saveRemoteState() {
+  if (!supabaseClient || !currentSession) return false;
+
+  const { error } = await supabaseClient
+    .from("dashboard_state")
+    .upsert({
+      id: REMOTE_STATE_ID,
+      data: getSerializableState(),
+      updated_at: new Date().toISOString(),
+      updated_by: currentSession.user.id
+    }, { onConflict: "id" });
+
+  if (error) {
+    console.warn("Could not save dashboard state to Supabase.", error);
+    return false;
+  }
+
+  return true;
+}
+
+function getActiveProjectForAssets() {
+  const selectedIndex = Number(state.selectedProjectId);
+  const byIndex = Number.isInteger(selectedIndex) ? state.projects[selectedIndex] : null;
+  if (byIndex) return { project: byIndex, index: selectedIndex };
+  return { project: null, index: -1 };
+}
+
+function getProjectStorageCode(project, index = -1) {
+  const number = project?.stt || (index >= 0 ? index + 1 : 1);
+  return `DA-${String(number).padStart(3, "0")}`;
+}
+
+async function handleProjectAssetFiles(files, kind) {
+  const { project, index } = getActiveProjectForAssets();
+  if (!project || !files.length) return;
+
+  projectAssetMutationInProgress = true;
+  clearTimeout(pendingProjectAssetResetTimer);
+
+  try {
+    const collectionName = kind === "photo" ? "photos" : "attachments";
+    project[collectionName] = Array.isArray(project[collectionName]) ? project[collectionName] : [];
+    const collection = project[collectionName];
+    const selectedSlot = pendingProjectAssetSlot?.kind === kind ? pendingProjectAssetSlot.slot : null;
+    pendingProjectAssetSlot = null;
+
+    for (const file of files) {
+      const record = {
+        name: file.name,
+        size: file.size,
+        type: file.type || "",
+        uploadedAt: new Date().toISOString()
+      };
+
+      try {
+        Object.assign(record, await uploadProjectAsset(file, project, kind));
+      } catch (error) {
+        record.storageError = error.message || String(error);
+      }
+
+      if (Number.isInteger(selectedSlot)) {
+        if (kind === "photo") {
+          record.photoSlot = selectedSlot;
+          let targetIndex = collection.findIndex((item) => Number(item?.photoSlot) === selectedSlot);
+          if (targetIndex < 0 && collection[selectedSlot]) targetIndex = selectedSlot;
+          if (targetIndex >= 0) {
+            await removeStoredAsset(collection[targetIndex]);
+            collection[targetIndex] = record;
+          } else {
+            collection[selectedSlot] = record;
+          }
+        } else {
+          record.docSlot = selectedSlot;
+          let targetIndex = collection.findIndex((item) => Number(item?.docSlot) === selectedSlot);
+          if (targetIndex < 0 && !collection.some((item) => item?.docSlot !== undefined && item?.docSlot !== null) && collection[selectedSlot]) {
+            targetIndex = selectedSlot;
+          }
+          if (targetIndex >= 0) {
+            await removeStoredAsset(collection[targetIndex]);
+            collection[targetIndex] = record;
+          } else {
+            collection.push(record);
+          }
+        }
+      } else {
+        collection.push(record);
+      }
+    }
+
+    persistStateLocal();
+    const saved = await saveRemoteState();
+    if (!saved && currentSession) {
+      alert("File đã tải lên Storage nhưng chưa lưu được danh sách vào Supabase. Kiểm tra mạng rồi thử lại.");
+    }
+
+    renderProjectDetail(project);
+  } finally {
+    projectAssetMutationInProgress = false;
+  }
+}
+
+async function handleProjectAssetDelete(event) {
+  event.preventDefault();
+  const kind = event.currentTarget.dataset.assetKind;
+  const index = Number(event.currentTarget.dataset.assetIndex);
+  const { project } = getActiveProjectForAssets();
+  const collection = kind === "photo" ? "photos" : "attachments";
+  const asset = project?.[collection]?.[index];
+
+  if (!project || !asset) return;
+  if (!confirm(`Xóa "${asset.name}" khỏi hồ sơ dự án?`)) return;
+
+  projectAssetMutationInProgress = true;
+  try {
+    await removeStoredAsset(asset);
+    project[collection].splice(index, 1);
+    persistStateLocal();
+    await saveRemoteState();
+    renderProjectDetail(project);
+  } finally {
+    projectAssetMutationInProgress = false;
+  }
+}
+
+async function renderProjectAssets(project) {
+  await ensureProjectAssetsFromStorage(project);
+  await renderProjectAttachments(project);
+  await renderProjectPhotos(project);
+}
+
+async function ensureProjectAssetsFromStorage(project) {
+  if (!project || !supabaseClient || !currentSession) return;
+  const index = state.projects.indexOf(project);
+  const projectCode = getProjectStorageCode(project, index);
+  const base = `${currentSession.user.id}/projects/${projectCode}`;
+  let recovered = false;
+
+  if (!Array.isArray(project.photos) || !project.photos.length) {
+    const photos = await listStoredProjectAssets(`${base}/photos`, "photo");
+    if (photos.length) {
+      project.photos = photos.slice(0, 2).map((photo, slot) => ({ ...photo, photoSlot: slot }));
+      recovered = true;
+    }
+  }
+
+  if (!Array.isArray(project.attachments) || !project.attachments.length) {
+    const attachments = await listStoredProjectAssets(`${base}/attachments`, "attachment");
+    if (attachments.length) {
+      project.attachments = attachments.slice(0, 2).map((file, slot) => ({ ...file, docSlot: slot }));
+      recovered = true;
+    }
+  }
+
+  if (recovered) {
+    persistStateLocal();
+    await saveRemoteState();
+  }
+}
+
+async function listStoredProjectAssets(path, kind) {
+  const { data, error } = await supabaseClient.storage
+    .from(SOURCE_FILE_BUCKET)
+    .list(path, { limit: 20, sortBy: { column: "created_at", order: "asc" } });
+
+  if (error || !Array.isArray(data)) return [];
+
+  return data
+    .filter((item) => item.name && !item.id?.startsWith("."))
+    .map((item) => ({
+      name: item.name.replace(/^\d+-/, ""),
+      size: item.metadata?.size || 0,
+      type: item.metadata?.mimetype || "",
+      uploadedAt: item.created_at || item.updated_at || new Date().toISOString(),
+      storageBucket: SOURCE_FILE_BUCKET,
+      storagePath: `${path}/${item.name}`,
+      storageStatus: "stored",
+      recoveredFromStorage: true,
+      assetKind: kind
+    }));
+}
+
+function renderProjectDetail(project) {
+  let index = state.projects.indexOf(project);
+  if (index < 0 && Number.isInteger(Number(state.selectedProjectId))) {
+    index = Number(state.selectedProjectId);
+    project = state.projects[index] || project;
+  }
+
+  const safeIndex = Math.max(0, index);
+  const group = deriveProjectGroup(project);
+  const disbRate = deriveDisbursementRate(project);
+  const progressRate = deriveProjectRate(project);
+  const plan = toNumber(project.plan);
+  const disbursed = plan * disbRate / 100;
+  const remaining = Math.max(0, plan - disbursed);
+
+  els.detailCode.textContent = `DA-2026-${String(safeIndex + 1).padStart(3, "0")}`;
+  els.detailGroup.textContent = `Nhóm ${group}`;
+  els.detailName.textContent = project.name;
+  els.detailMeta.textContent = `Phường Bình Tân | Chu kỳ thực hiện: ${project.period || "2026"}`;
+  els.detailBudget.textContent = `${formatNumber(project.budget * 1_000_000_000)} VNĐ`;
+  els.detailStatus.textContent = project.status || "Đang cập nhật";
+  els.detailStatus.className = `project-status ${statusClass(project.status)}`;
+  els.detailLegal.textContent = project.legal || "Đang cập nhật hồ sơ pháp lý.";
+  els.detailProgressDoc.textContent = project.progress || "Đang cập nhật tiến độ hồ sơ.";
+  els.detailPlan.textContent = `${formatNumber(plan * 1_000_000_000)} VNĐ`;
+  els.detailDisbursed.textContent = `${formatNumber(disbursed * 1_000_000_000)} VNĐ`;
+  els.detailDisbRate.textContent = `Tỷ lệ: ${disbRate}%`;
+  els.detailRemaining.textContent = `${formatNumber(remaining * 1_000_000_000)} VNĐ`;
+  els.detailContractValue.textContent = `${formatNumber(project.budget * 0.78)} tỷ`;
+  els.detailProgressRate.textContent = `${progressRate}%`;
+  els.detailProgressBar.style.width = `${progressRate}%`;
+  els.detailDifficulty.textContent = project.difficulty || project.progress || "Chưa ghi nhận khó khăn lớn.";
+  renderProjectAssets(project);
+}
