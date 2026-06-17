@@ -12,6 +12,7 @@ const state = {
   projects: [],
   reportText: "",
   files: [],
+  importHistory: [],
   selectedProjectId: null,
   charts: {
     status: null,
@@ -75,7 +76,8 @@ function cacheElements() {
     "reportText", "docStatus", "presentationNotes", "capitalRows", "capitalTotalPlan",
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
-    "settingsExportExcelBtn", "settingsClearBtn"
+    "settingsExportExcelBtn", "settingsClearBtn", "sheetUrlInput", "syncSheetBtn",
+    "sourceHistory", "historySummary"
     , "projectStatusFilter", "projectGroupFilter", "backToProjectsBtn", "detailCode",
     "detailGroup", "detailName", "detailMeta", "detailBudget", "detailStatus",
     "detailLegal", "detailProgressDoc", "detailPlan", "detailDisbursed",
@@ -128,6 +130,7 @@ function bindEvents() {
     await handleFiles([...event.target.files]);
     event.target.value = "";
   });
+  els.syncSheetBtn?.addEventListener("click", handleGoogleSheetSync);
   els.searchInput.addEventListener("input", renderProjectsTable);
   els.projectStatusFilter.addEventListener("change", renderProjectsTable);
   els.projectGroupFilter.addEventListener("change", renderProjectsTable);
@@ -275,11 +278,29 @@ async function handleFiles(files) {
         const rows = await readExcel(file);
         const projects = extractProjectsFromRows(rows);
         parsedProjects.push(...projects);
+        recordImportHistory({
+          type: "Excel",
+          name: file.name,
+          rowCount: rows.length,
+          projectCount: projects.length,
+          status: projects.length ? "Đã phân tích" : "Không nhận diện dự án",
+          storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
+          storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : ""
+        });
         addLog(`Excel "${file.name}": đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
       } else if (name.endsWith(".docx")) {
         const text = await readDocx(file);
         state.reportText = cleanText(text);
         els.reportText.value = state.reportText;
+        recordImportHistory({
+          type: "Word",
+          name: file.name,
+          rowCount: Math.round(state.reportText.length / 1000),
+          projectCount: 0,
+          status: "Đã trích thuyết minh",
+          storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
+          storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : ""
+        });
         els.docStatus.textContent = `Đã đọc ${Math.round(state.reportText.length / 1000)}k ký tự từ Word`;
         addLog(`Word "${file.name}": trích xuất ${state.reportText.length.toLocaleString("vi-VN")} ký tự thuyết minh.`);
       } else {
@@ -326,6 +347,112 @@ function readExcel(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
+}
+
+function readRowsFromCsvText(text) {
+  if (!window.XLSX) {
+    throw new Error("Thư viện đọc bảng chưa tải xong. Vui lòng refresh trang và thử lại.");
+  }
+
+  const workbook = XLSX.read(text, { type: "string" });
+  const sheetRows = workbook.SheetNames.map((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+    return { sheetName, rows };
+  });
+
+  return sheetRows.sort((a, b) => b.rows.length - a.rows.length)[0]?.rows || [];
+}
+
+function buildGoogleSheetCsvUrl(input) {
+  const raw = stringify(input).trim();
+  if (!raw) throw new Error("Chưa nhập link Google Sheet.");
+
+  const url = new URL(raw);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const gid = url.searchParams.get("gid") || hashParams.get("gid") || "0";
+
+  if (url.searchParams.get("output") === "csv" || url.searchParams.get("format") === "csv" || url.search.includes("tqx=out:csv")) {
+    return url.toString();
+  }
+
+  const publishedMatch = url.pathname.match(/\/spreadsheets\/d\/e\/([^/]+)/);
+  if (publishedMatch) {
+    return `https://docs.google.com/spreadsheets/d/e/${publishedMatch[1]}/pub?output=csv&gid=${encodeURIComponent(gid)}`;
+  }
+
+  const sheetMatch = url.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+  if (sheetMatch) {
+    return `https://docs.google.com/spreadsheets/d/${sheetMatch[1]}/export?format=csv&gid=${encodeURIComponent(gid)}`;
+  }
+
+  if (url.pathname.toLowerCase().endsWith(".csv")) return url.toString();
+
+  throw new Error("Link này chưa nhận diện được. Hãy dùng link Google Sheet public hoặc link CSV.");
+}
+
+async function handleGoogleSheetSync() {
+  const rawUrl = els.sheetUrlInput?.value.trim();
+  if (!rawUrl) {
+    addLog("Chưa nhập link Google Sheet.");
+    return;
+  }
+
+  const button = els.syncSheetBtn;
+  const oldText = button?.textContent;
+
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Đang đồng bộ...";
+    }
+
+    const csvUrl = buildGoogleSheetCsvUrl(rawUrl);
+    addLog("Đang lấy dữ liệu từ Google Sheet...");
+    const response = await fetch(`/api/google-sheet?url=${encodeURIComponent(csvUrl)}`);
+    const text = await response.text();
+    if (!response.ok) throw new Error(text || "Không lấy được dữ liệu Google Sheet.");
+
+    const rows = readRowsFromCsvText(text);
+    const projects = extractProjectsFromRows(rows);
+    if (projects.length) {
+      state.projects = mergeProjects(projects);
+      normalizeProjectNumbers();
+    }
+
+    recordImportHistory({
+      type: "Google Sheet",
+      name: compactSentence(rawUrl, 92),
+      url: rawUrl,
+      rowCount: rows.length,
+      projectCount: projects.length,
+      status: projects.length ? "Đã đồng bộ" : "Không nhận diện dự án",
+      storageStatus: "linked"
+    });
+
+    addLog(`Google Sheet: đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
+    els.analysisStatus.textContent = projects.length ? "Đã đồng bộ Google Sheet" : "Sheet chưa có bảng dự án phù hợp";
+    persistState();
+    renderAll();
+  } catch (error) {
+    recordImportHistory({
+      type: "Google Sheet",
+      name: compactSentence(rawUrl, 92),
+      url: rawUrl,
+      rowCount: 0,
+      projectCount: 0,
+      status: "Lỗi đồng bộ",
+      error: error.message || String(error)
+    });
+    addLog(`Không đồng bộ được Google Sheet: ${error.message || error}`);
+    persistState();
+    renderSourceHistory();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = oldText || "Đồng bộ Sheet";
+    }
+  }
 }
 
 async function readDocx(file) {
@@ -468,6 +595,7 @@ function renderAll() {
   renderCapitalPlan();
   renderPeriodicReport();
   renderSettings();
+  renderSourceHistory();
 }
 
 function renderDashboard() {
@@ -885,6 +1013,7 @@ function clearData() {
   state.projects = [];
   state.reportText = "";
   state.files = [];
+  state.importHistory = [];
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -1015,6 +1144,17 @@ function formatNumber(value) {
   return toNumber(value).toLocaleString("vi-VN", { maximumFractionDigits: 3 });
 }
 
+function formatDateTimeLabel(value) {
+  if (!value) return "Đang cập nhật";
+  return new Date(value).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
 function deriveProjectRate(project) {
   const text = normalizeText([project.progress, project.disbursement, project.evaluation, project.status].join(" "));
   if (text.includes("100") || text.includes("dam bao") || text.includes("hoan thanh")) return 90;
@@ -1091,6 +1231,66 @@ function downloadBlob(content, filename, type) {
 function compactSentence(value, maxLength = 54) {
   const text = stringify(value);
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
+}
+
+function recordImportHistory(entry) {
+  state.importHistory = Array.isArray(state.importHistory) ? state.importHistory : [];
+  state.importHistory.unshift({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    importedAt: new Date().toISOString(),
+    type: entry.type || "Nguồn dữ liệu",
+    name: entry.name || "Chưa đặt tên",
+    url: entry.url || "",
+    rowCount: Number(entry.rowCount) || 0,
+    projectCount: Number(entry.projectCount) || 0,
+    status: entry.status || "Đã ghi nhận",
+    storageStatus: entry.storageStatus || "",
+    storagePath: entry.storagePath || "",
+    error: entry.error || ""
+  });
+  state.importHistory = state.importHistory.slice(0, 30);
+}
+
+function renderSourceHistory() {
+  if (!els.sourceHistory || !els.historySummary) return;
+
+  const rows = Array.isArray(state.importHistory) ? state.importHistory : [];
+  els.historySummary.textContent = rows.length
+    ? `${rows.length} lần thêm dữ liệu gần nhất`
+    : "Chưa có lịch sử";
+
+  if (!rows.length) {
+    els.sourceHistory.innerHTML = `
+      <div class="history-empty">
+        <strong>Chưa có nguồn dữ liệu nào</strong>
+        <span>Upload Excel/Word hoặc đồng bộ Google Sheet để hệ thống ghi lại lịch sử.</span>
+      </div>
+    `;
+    return;
+  }
+
+  els.sourceHistory.innerHTML = rows.map((item) => {
+    const isError = normalizeText(item.status).includes("loi") || item.error;
+    const statusClassName = isError ? "is-error" : "is-ok";
+    const sourceLink = item.url
+      ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Mở nguồn</a>`
+      : "";
+
+    return `
+      <div class="history-item">
+        <div class="history-type">${escapeHtml(item.type)}</div>
+        <div class="history-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${formatDateTimeLabel(item.importedAt)} · ${formatNumber(item.rowCount)} dòng · ${formatNumber(item.projectCount)} dự án</span>
+          ${item.error ? `<em>${escapeHtml(item.error)}</em>` : ""}
+        </div>
+        <div class="history-actions">
+          <span class="history-status ${statusClassName}">${escapeHtml(item.status)}</span>
+          ${sourceLink}
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderCapitalPlan() {
@@ -1461,6 +1661,7 @@ function restoreStateFromLocal() {
     state.projects = [];
     state.reportText = "";
     state.files = [];
+    state.importHistory = [];
     normalizeProjectNumbers();
     return;
   }
@@ -1483,7 +1684,8 @@ function hasUsefulState(saved) {
   return Boolean(saved && (
     saved.projects?.length ||
     saved.reportText ||
-    saved.files?.length
+    saved.files?.length ||
+    saved.importHistory?.length
   ));
 }
 
@@ -1491,6 +1693,7 @@ function applySavedState(saved) {
   state.projects = saved.projects || [];
   state.reportText = saved.reportText || "";
   state.files = saved.files || [];
+  state.importHistory = saved.importHistory || saved.sourceHistory || [];
   els.reportText.value = state.reportText;
   normalizeProjectNumbers();
 }
@@ -1508,7 +1711,8 @@ function getSerializableState() {
   return {
     projects: state.projects,
     reportText: state.reportText,
-    files: state.files
+    files: state.files,
+    importHistory: state.importHistory
   };
 }
 
@@ -1646,6 +1850,7 @@ async function clearData() {
   state.projects = [];
   state.reportText = "";
   state.files = [];
+  state.importHistory = [];
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -2527,6 +2732,93 @@ function renderCharts() {
   els.budgetSummary.querySelectorAll("[data-chart-detail]").forEach((row) => {
     row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
   });
+}
+
+async function handleFiles(files) {
+  if (!files.length) return;
+
+  addLog(`Đã nhận ${files.length} file. Đang phân tích và lưu file gốc...`);
+  els.analysisStatus.textContent = "Đang phân tích";
+
+  const parsedProjects = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    const fileRecord = {
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      importedAt: new Date().toISOString()
+    };
+
+    try {
+      Object.assign(fileRecord, await uploadSourceFile(file));
+      if (fileRecord.storagePath) addLog(`Đã lưu file gốc "${file.name}" lên Supabase Storage.`);
+    } catch (error) {
+      fileRecord.storageError = error.message || String(error);
+      addLog(`Chưa lưu được file gốc "${file.name}" lên Storage: ${fileRecord.storageError}`);
+    }
+
+    state.files.push(fileRecord);
+
+    try {
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const rows = await readExcel(file);
+        const projects = extractProjectsFromRows(rows);
+        parsedProjects.push(...projects);
+        recordImportHistory({
+          type: "Excel",
+          name: file.name,
+          rowCount: rows.length,
+          projectCount: projects.length,
+          status: projects.length ? "Đã phân tích" : "Không nhận diện dự án",
+          storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
+          storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : ""
+        });
+        addLog(`Excel "${file.name}": đọc ${rows.length} dòng, nhận diện ${projects.length} dự án.`);
+      } else if (name.endsWith(".docx")) {
+        const text = await readDocx(file);
+        state.reportText = cleanText(text);
+        els.reportText.value = state.reportText;
+        els.docStatus.textContent = `Đã đọc ${Math.round(state.reportText.length / 1000)}k ký tự từ Word`;
+        recordImportHistory({
+          type: "Word",
+          name: file.name,
+          rowCount: Math.round(state.reportText.length / 1000),
+          projectCount: 0,
+          status: "Đã trích thuyết minh",
+          storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
+          storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : ""
+        });
+        addLog(`Word "${file.name}": trích xuất ${state.reportText.length.toLocaleString("vi-VN")} ký tự thuyết minh.`);
+      } else {
+        addLog(`Bỏ qua "${file.name}" vì chưa hỗ trợ định dạng này.`);
+      }
+    } catch (error) {
+      recordImportHistory({
+        type: name.endsWith(".docx") ? "Word" : "File",
+        name: file.name,
+        rowCount: 0,
+        projectCount: 0,
+        status: "Lỗi phân tích",
+        storageStatus: typeof fileRecord !== "undefined" ? fileRecord.storageStatus || "" : "",
+        storagePath: typeof fileRecord !== "undefined" ? fileRecord.storagePath || "" : "",
+        error: error.message || String(error)
+      });
+      addLog(`Không đọc được "${file.name}": ${error.message || error}`);
+    }
+  }
+
+  if (parsedProjects.length) {
+    state.projects = mergeProjects(parsedProjects);
+    normalizeProjectNumbers();
+  }
+
+  els.analysisStatus.textContent = state.projects.length ? "Đã phân tích xong" : "Chưa có bảng dự án";
+  els.fileInput.value = "";
+  persistState();
+  renderAll();
+  switchView("dashboardView");
 }
 
 let projectAssetMutationInProgress = false;

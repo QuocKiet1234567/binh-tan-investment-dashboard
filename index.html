@@ -285,6 +285,29 @@
           </section>
         </div>
 
+        <section class="panel source-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Kết nối Google Sheet</h2>
+              <span>Dán link Google Sheet public hoặc link export CSV để đồng bộ dữ liệu dự án.</span>
+            </div>
+          </div>
+          <div class="sheet-connect">
+            <input id="sheetUrlInput" type="url" placeholder="Dán link Google Sheet hoặc CSV...">
+            <button id="syncSheetBtn" class="primary-btn" type="button">Đồng bộ Sheet</button>
+          </div>
+        </section>
+
+        <section class="panel source-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Lịch sử thêm dữ liệu</h2>
+              <span id="historySummary">Chưa có lịch sử</span>
+            </div>
+          </div>
+          <div id="sourceHistory" class="source-history"></div>
+        </section>
+
         <section class="panel">
           <div class="panel-head">
             <h2>Preview dữ liệu sau khi đọc file</h2>
