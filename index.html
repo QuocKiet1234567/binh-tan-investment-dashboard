@@ -686,51 +686,133 @@
       </section>
 
       <section id="settingsView" class="view">
-        <div class="module-intro">
+        <div class="settings-command">
           <div>
-            <span>Quản trị dữ liệu</span>
-            <strong>Kiểm tra dữ liệu đang lưu và thao tác hệ thống</strong>
+            <span>Quản trị hệ thống</span>
+            <h2>Trung tâm dữ liệu và sao lưu</h2>
+            <p>Theo dõi đồng bộ Supabase, quản lý file nguồn và bảo vệ dữ liệu báo cáo.</p>
           </div>
-          <em>Dùng khi cần xóa dữ liệu cũ, nhập lại file hoặc xuất dữ liệu gốc.</em>
+          <div class="settings-command-actions">
+            <button id="settingsTestConnectionBtn" class="secondary-btn" type="button">Kiểm tra kết nối</button>
+            <button class="primary-btn" data-jump="importView" type="button">Nhập dữ liệu mới</button>
+          </div>
         </div>
-        <div class="settings-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Cấu hình hệ thống</h2>
-              <span>Thiết lập dữ liệu, đăng nhập và xuất báo cáo</span>
+
+        <div class="settings-overview">
+          <article>
+            <span>Dự án đang quản lý</span>
+            <strong id="settingProjectCount">0</strong>
+            <em>Hồ sơ dự án</em>
+          </article>
+          <article>
+            <span>File nguồn đã lưu</span>
+            <strong id="settingFileCount">0</strong>
+            <em id="settingFileSize">0 MB</em>
+          </article>
+          <article>
+            <span>Lịch sử nhập liệu</span>
+            <strong id="settingImportCount">0</strong>
+            <em>Nguồn dữ liệu</em>
+          </article>
+          <article>
+            <span>Nhật ký cập nhật</span>
+            <strong id="settingAuditCount">0</strong>
+            <em>Thao tác được ghi nhận</em>
+          </article>
+        </div>
+
+        <div class="settings-workspace">
+          <section class="settings-main-panel">
+            <div class="settings-section-head">
+              <div>
+                <span>Hạ tầng dữ liệu</span>
+                <h2>Trạng thái hệ thống</h2>
+              </div>
+              <span id="settingsHealthBadge" class="settings-health">Đang kiểm tra</span>
             </div>
-            <div class="settings-list">
-              <div>
-                <strong>Nguồn dữ liệu</strong>
-                <span>Upload Word/Excel trực tiếp trên web. Dữ liệu được lưu tạm trên trình duyệt.</span>
-              </div>
-              <div>
-                <strong>Phiên đăng nhập</strong>
-                <span>Đăng nhập nội bộ bản demo. Có thể nâng cấp lên tài khoản thật khi gắn database.</span>
-              </div>
-              <div>
-                <strong>Trạng thái lưu trữ</strong>
-                <span id="settingStorageStatus">Đang kiểm tra...</span>
-              </div>
+
+            <div class="system-status-list">
+              <article>
+                <span class="system-status-icon is-blue">
+                  <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M4 10h16M9 5v14"></path></svg>
+                </span>
+                <div>
+                  <strong>Cơ sở dữ liệu Supabase</strong>
+                  <p id="settingStorageStatus">Đang kiểm tra trạng thái đồng bộ...</p>
+                </div>
+                <span id="settingDatabaseBadge" class="status-badge">Đang kiểm tra</span>
+              </article>
+              <article>
+                <span class="system-status-icon is-cyan">
+                  <svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z"></path><path d="M3 7l4-4h6l2 4"></path></svg>
+                </span>
+                <div>
+                  <strong>Kho file nguồn</strong>
+                  <p id="settingStorageDetail">Lưu Excel, Word, PDF và ảnh hiện trường.</p>
+                </div>
+                <span id="settingStorageBadge" class="status-badge">Storage</span>
+              </article>
+              <article>
+                <span class="system-status-icon is-green">
+                  <svg viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 5 3.4 7.6 8 9 4.6-1.4 8-4 8-9V7z"></path><path d="m9 12 2 2 4-5"></path></svg>
+                </span>
+                <div>
+                  <strong>Phiên đăng nhập và phân quyền</strong>
+                  <p id="settingAccountDetail">Đang đọc thông tin tài khoản...</p>
+                </div>
+                <span id="settingRoleBadge" class="status-badge">Admin</span>
+              </article>
+            </div>
+
+            <div class="sync-detail">
+              <div><span>Cập nhật Supabase gần nhất</span><strong id="settingLastSync">Chưa có</strong></div>
+              <div><span>Trạng thái trình duyệt</span><strong id="settingLocalSync">Đã đồng bộ</strong></div>
+              <div><span>Mã bản dữ liệu</span><strong id="settingStateId">main</strong></div>
             </div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Thao tác nhanh</h2>
-              <span>Quản trị dữ liệu báo cáo</span>
-            </div>
-            <div class="settings-actions">
-              <button class="primary-btn" data-jump="importView" type="button">Nhập dữ liệu mới</button>
-              <button class="secondary-btn" id="settingsExportExcelBtn" type="button">Xuất Excel</button>
-              <button class="secondary-btn" id="settingsClearBtn" type="button">Xóa dữ liệu cục bộ</button>
-            </div>
-            <div class="settings-meter">
-              <span>Dự án đang lưu</span>
-              <strong id="settingProjectCount">0</strong>
-            </div>
-          </section>
+          <aside class="settings-side">
+            <section class="settings-tool-panel">
+              <div class="settings-section-head">
+                <div>
+                  <span>Sao lưu và phục hồi</span>
+                  <h2>Bảo vệ dữ liệu</h2>
+                </div>
+              </div>
+              <p class="settings-tool-copy">Tải bản sao đầy đủ gồm dự án, cấu hình báo cáo, lịch sử nhập liệu và nhật ký cập nhật.</p>
+              <div class="settings-tool-actions">
+                <button id="settingsBackupBtn" class="primary-btn" type="button">Tải bản sao JSON</button>
+                <input id="settingsRestoreInput" type="file" accept=".json,application/json" hidden>
+                <button id="settingsRestoreBtn" class="secondary-btn" type="button">Phục hồi từ bản sao</button>
+                <button class="secondary-btn" id="settingsExportExcelBtn" type="button">Xuất phụ lục Excel</button>
+              </div>
+              <div class="backup-note">
+                <span>Bản sao gần nhất</span>
+                <strong id="settingBackupStatus">Chưa tạo trong phiên này</strong>
+              </div>
+            </section>
+
+            <section class="settings-danger-panel">
+              <div>
+                <span>Vùng nguy hiểm</span>
+                <h2>Xóa dữ liệu hệ thống</h2>
+                <p>Xóa danh mục dự án, lịch sử và cấu hình đang lưu. File gốc trên Storage vẫn được giữ để đối chiếu.</p>
+              </div>
+              <button class="danger-btn" id="settingsClearBtn" type="button">Xóa toàn bộ dữ liệu</button>
+            </section>
+          </aside>
         </div>
+
+        <section class="settings-activity-panel">
+          <div class="settings-section-head">
+            <div>
+              <span>Hoạt động gần đây</span>
+              <h2>Dấu vết dữ liệu</h2>
+            </div>
+            <button class="text-action" data-jump="importView" type="button">Xem toàn bộ lịch sử</button>
+          </div>
+          <div id="settingsRecentActivity" class="settings-activity-list"></div>
+        </section>
       </section>
     </main>
   </div>

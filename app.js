@@ -85,6 +85,11 @@ function cacheElements() {
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
     "settingsExportExcelBtn", "settingsClearBtn", "sheetUrlInput", "syncSheetBtn",
+    "settingFileCount", "settingFileSize", "settingImportCount", "settingAuditCount",
+    "settingsHealthBadge", "settingDatabaseBadge", "settingStorageDetail", "settingStorageBadge",
+    "settingAccountDetail", "settingRoleBadge", "settingLastSync", "settingLocalSync",
+    "settingStateId", "settingsTestConnectionBtn", "settingsBackupBtn", "settingsRestoreInput",
+    "settingsRestoreBtn", "settingBackupStatus", "settingsRecentActivity",
     "reportTitleInput", "reportPeriodInput", "reportDateInput", "reportRecipientInput",
     "reportProjectCount", "reportTotalBudget", "reportTotalPlan", "reportSelectedCount",
     "reportPreviewTitle", "reportPreviewPeriod", "reportPreviewRecipient",
@@ -160,6 +165,10 @@ function bindEvents() {
   els.periodicRows?.addEventListener("click", handleReportIssueOpen);
   els.settingsExportExcelBtn.addEventListener("click", exportCsv);
   els.settingsClearBtn.addEventListener("click", clearData);
+  els.settingsTestConnectionBtn?.addEventListener("click", testSystemConnection);
+  els.settingsBackupBtn?.addEventListener("click", exportSystemBackup);
+  els.settingsRestoreBtn?.addEventListener("click", () => els.settingsRestoreInput?.click());
+  els.settingsRestoreInput?.addEventListener("change", restoreSystemBackup);
   els.reportText.addEventListener("input", () => {
     state.reportText = els.reportText.value;
     persistState();
@@ -1228,7 +1237,6 @@ function clearData() {
   if (!confirm("Xóa toàn bộ dữ liệu đã phân tích trên trình duyệt này?")) return;
   state.projects = [];
   state.reportText = "";
-  state.files = [];
   state.importHistory = [];
   state.auditLog = [];
   state.reportConfig = {};
@@ -2121,7 +2129,6 @@ async function clearData() {
 
   state.projects = [];
   state.reportText = "";
-  state.files = [];
   state.importHistory = [];
   state.auditLog = [];
   state.reportConfig = {};
@@ -3031,6 +3038,7 @@ function applyPermissionUI() {
     "syncSheetBtn",
     "clearDataBtn",
     "settingsClearBtn",
+    "settingsRestoreBtn",
     "detailFileBtn",
     "detailPhotoBtn"
   ].forEach((id) => {
@@ -3230,6 +3238,198 @@ function renderProjectAudit(project) {
 function compactAuditValue(value) {
   const text = stringify(value).trim() || "Chưa có";
   return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+}
+
+function renderSettings() {
+  if (!els.settingProjectCount) return;
+
+  const allFiles = collectAllStoredFiles();
+  const storedFiles = allFiles.filter((file) => file.storagePath);
+  const totalFileSize = allFiles.reduce((total, file) => total + (Number(file.size) || 0), 0);
+  const syncMeta = readSyncMeta();
+  const connected = Boolean(supabaseClient && currentSession);
+  const pending = Boolean(syncMeta?.pending);
+  const role = getCurrentUserRole();
+  const email = currentSession?.user?.email || "Chưa đăng nhập Supabase";
+
+  els.settingProjectCount.textContent = state.projects.length;
+  els.settingFileCount.textContent = storedFiles.length;
+  els.settingFileSize.textContent = formatFileSize(totalFileSize);
+  els.settingImportCount.textContent = (state.importHistory || []).length;
+  els.settingAuditCount.textContent = (state.auditLog || []).length;
+  els.settingStorageStatus.textContent = connected
+    ? `${state.projects.length} dự án đang được lưu trong bảng dashboard_state.`
+    : "Chưa có phiên Supabase; dữ liệu hiện chỉ có trong bộ nhớ trình duyệt.";
+  els.settingStorageDetail.textContent = `${storedFiles.length}/${allFiles.length} file đã có đường dẫn Storage, tổng dung lượng ghi nhận ${formatFileSize(totalFileSize)}.`;
+  els.settingAccountDetail.textContent = connected
+    ? `${email} đang đăng nhập bằng Supabase Authentication.`
+    : "Chưa xác định được tài khoản đăng nhập.";
+  els.settingRoleBadge.textContent = String(role).toUpperCase();
+  els.settingLastSync.textContent = remoteStateUpdatedAt
+    ? formatDateTimeLabel(remoteStateUpdatedAt)
+    : "Chưa ghi nhận";
+  els.settingLocalSync.textContent = pending ? "Có thay đổi chờ đồng bộ" : "Đã đồng bộ";
+  els.settingStateId.textContent = REMOTE_STATE_ID;
+
+  setStatusBadge(els.settingsHealthBadge, connected && !pending ? "Hoạt động tốt" : pending ? "Chờ đồng bộ" : "Ngoại tuyến", connected && !pending ? "ok" : pending ? "warning" : "error");
+  setStatusBadge(els.settingDatabaseBadge, connected ? "Đã kết nối" : "Mất kết nối", connected ? "ok" : "error");
+  setStatusBadge(els.settingStorageBadge, storedFiles.length === allFiles.length ? "Đã lưu" : "Cần rà soát", storedFiles.length === allFiles.length ? "ok" : "warning");
+
+  renderSettingsActivity();
+}
+
+function collectAllStoredFiles() {
+  const files = [...(state.files || [])];
+  (state.projects || []).forEach((project) => {
+    files.push(...(project.attachments || []), ...(project.photos || []));
+  });
+  return files.filter(Boolean);
+}
+
+function setStatusBadge(element, text, stateName) {
+  if (!element) return;
+  element.textContent = text;
+  element.classList.toggle("is-warning", stateName === "warning");
+  element.classList.toggle("is-error", stateName === "error");
+}
+
+function renderSettingsActivity() {
+  if (!els.settingsRecentActivity) return;
+  const imports = (state.importHistory || []).map((item) => ({
+    type: item.type || "Nhập dữ liệu",
+    title: item.name || "Nguồn dữ liệu",
+    date: item.importedAt
+  }));
+  const audits = (state.auditLog || []).map((item) => ({
+    type: item.action || "Cập nhật",
+    title: item.userEmail || "Tài khoản quản trị",
+    date: item.changedAt
+  }));
+  const rows = [...imports, ...audits]
+    .filter((item) => item.date)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 6);
+
+  els.settingsRecentActivity.innerHTML = rows.length
+    ? rows.map((item) => `
+        <article class="settings-activity-item">
+          <span>${escapeHtml(item.type)}</span>
+          <strong title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong>
+          <time datetime="${escapeHtml(item.date)}">${escapeHtml(formatDateTimeLabel(item.date))}</time>
+        </article>
+      `).join("")
+    : `<div class="audit-empty">Chưa có hoạt động dữ liệu nào được ghi nhận.</div>`;
+}
+
+async function testSystemConnection() {
+  const button = els.settingsTestConnectionBtn;
+  if (!button) return;
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Đang kiểm tra...";
+
+  try {
+    if (!supabaseClient || !currentSession) throw new Error("Chưa có phiên đăng nhập Supabase.");
+    const startedAt = performance.now();
+    const { error } = await supabaseClient
+      .from("dashboard_state")
+      .select("updated_at")
+      .eq("id", REMOTE_STATE_ID)
+      .maybeSingle();
+    if (error) throw error;
+    const latency = Math.round(performance.now() - startedAt);
+    setStatusBadge(els.settingsHealthBadge, `Kết nối tốt · ${latency} ms`, "ok");
+    setStatusBadge(els.settingDatabaseBadge, "Đã kết nối", "ok");
+    button.textContent = "Kết nối ổn định";
+  } catch (error) {
+    setStatusBadge(els.settingsHealthBadge, "Kiểm tra thất bại", "error");
+    setStatusBadge(els.settingDatabaseBadge, "Lỗi kết nối", "error");
+    alert(`Không kiểm tra được Supabase: ${error.message || error}`);
+    button.textContent = "Thử lại kết nối";
+  } finally {
+    setTimeout(() => {
+      button.disabled = false;
+      button.textContent = previousText;
+    }, 1800);
+  }
+}
+
+function exportSystemBackup() {
+  const backup = {
+    schema: "binh-tan-investment-dashboard-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    exportedBy: currentSession?.user?.email || "",
+    remoteStateId: REMOTE_STATE_ID,
+    data: getSerializableState()
+  };
+  const date = backup.exportedAt.slice(0, 10);
+  downloadBlob(
+    JSON.stringify(backup, null, 2),
+    `sao-luu-du-lieu-binh-tan-${date}.json`,
+    "application/json;charset=utf-8"
+  );
+  if (els.settingBackupStatus) {
+    els.settingBackupStatus.textContent = `${formatDateTimeLabel(backup.exportedAt)} · ${formatFileSize(new Blob([JSON.stringify(backup)]).size)}`;
+  }
+}
+
+async function restoreSystemBackup(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (parsed.schema !== "binh-tan-investment-dashboard-backup" || !parsed.data || !Array.isArray(parsed.data.projects)) {
+      throw new Error("File không đúng định dạng sao lưu của hệ thống.");
+    }
+    if (!confirm(`Phục hồi ${parsed.data.projects.length} dự án từ bản sao ngày ${formatDateTimeLabel(parsed.exportedAt)}? Dữ liệu hiện tại sẽ được thay thế.`)) return;
+
+    applySavedState(parsed.data);
+    state.reportConfig = parsed.data.reportConfig || {};
+    state.auditLog = parsed.data.auditLog || [];
+    persistStateLocal();
+    const saved = await saveRemoteState();
+    renderAll();
+    if (!saved) throw new Error("Đã phục hồi trên trình duyệt nhưng chưa đồng bộ được Supabase.");
+    alert("Phục hồi dữ liệu thành công.");
+  } catch (error) {
+    alert(`Không thể phục hồi bản sao: ${error.message || error}`);
+  }
+}
+
+async function clearData() {
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
+
+  const confirmation = prompt(
+    `Thao tác này sẽ xóa ${state.projects.length} dự án, lịch sử nhập liệu, nhật ký cập nhật và cấu hình báo cáo. File gốc trên Storage vẫn được giữ lại.\n\nNhập XOA để xác nhận:`
+  );
+  if (confirmation !== "XOA") return;
+
+  state.projects = [];
+  state.reportText = "";
+  state.files = [];
+  state.importHistory = [];
+  state.auditLog = [];
+  state.reportConfig = {};
+  state.selectedProjectId = null;
+  els.reportText.value = "";
+  els.analysisLog.innerHTML = "";
+  els.analysisStatus.textContent = "Chưa có dữ liệu";
+  els.docStatus.textContent = "Chưa upload Word";
+  persistStateLocal();
+  const saved = await saveRemoteState();
+  renderAll();
+  switchView("settingsView");
+  alert(saved ? "Đã xóa dữ liệu hệ thống. File gốc trên Storage vẫn được giữ lại." : "Đã xóa dữ liệu trên trình duyệt nhưng chưa đồng bộ được Supabase.");
 }
 
 function appendProjectAudit(project, action, changes) {
