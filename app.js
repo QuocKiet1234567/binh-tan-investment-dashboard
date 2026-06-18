@@ -188,6 +188,12 @@ function bindEvents() {
   document.getElementById("projectEditModal")?.addEventListener("click", (event) => {
     if (event.target.id === "projectEditModal") closeProjectEditModal();
   });
+  document.addEventListener("keydown", (event) => {
+    const modal = document.getElementById("projectEditModal");
+    if (event.key === "Escape" && modal && !modal.classList.contains("hidden")) {
+      closeProjectEditModal();
+    }
+  });
 
   ["dragenter", "dragover"].forEach((name) => {
     els.dropZone.addEventListener(name, (event) => {
