@@ -12,6 +12,7 @@ let currentSession = null;
 let remoteStateUpdatedAt = null;
 let remoteSaveQueue = Promise.resolve(true);
 let remoteConflictNotified = false;
+let reportSaveTimer = null;
 
 const state = {
   projects: [],
@@ -19,6 +20,7 @@ const state = {
   files: [],
   importHistory: [],
   auditLog: [],
+  reportConfig: {},
   selectedProjectId: null,
   charts: {
     status: null,
@@ -83,6 +85,10 @@ function cacheElements() {
     "capitalSlowCount", "capitalHealthyRate", "periodicSummary", "periodicRows",
     "periodicExportBtn", "settingStorageStatus", "settingProjectCount",
     "settingsExportExcelBtn", "settingsClearBtn", "sheetUrlInput", "syncSheetBtn",
+    "reportTitleInput", "reportPeriodInput", "reportDateInput", "reportRecipientInput",
+    "reportProjectCount", "reportTotalBudget", "reportTotalPlan", "reportSelectedCount",
+    "reportPreviewTitle", "reportPreviewPeriod", "reportPreviewRecipient",
+    "reportPreviewIssues", "reportReadiness", "reportIssueCount", "toggleReportIssuesBtn",
     "sourceHistory", "historySummary"
     , "projectStatusFilter", "projectGroupFilter", "backToProjectsBtn", "detailCode",
     "detailGroup", "detailName", "detailMeta", "detailBudget", "detailStatus",
@@ -146,6 +152,12 @@ function bindEvents() {
   els.exportExcelBtn.addEventListener("click", exportCsv);
   els.exportWordBtn.addEventListener("click", exportWord);
   els.periodicExportBtn.addEventListener("click", exportWord);
+  ["reportTitleInput", "reportPeriodInput", "reportDateInput", "reportRecipientInput"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", updateReportConfiguration);
+  });
+  els.toggleReportIssuesBtn?.addEventListener("click", toggleAllReportIssues);
+  els.periodicRows?.addEventListener("change", handleReportIssueSelection);
+  els.periodicRows?.addEventListener("click", handleReportIssueOpen);
   els.settingsExportExcelBtn.addEventListener("click", exportCsv);
   els.settingsClearBtn.addEventListener("click", clearData);
   els.reportText.addEventListener("input", () => {
@@ -933,21 +945,166 @@ function renderPeriodicReport() {
   const alerts = getAlertProjects();
   const totalBudget = sum(projects, "budget");
   const totalPlan = sum(projects, "plan");
+  const config = ensureReportConfiguration();
+  const issues = getReportIssues();
+  const selectedIds = new Set(config.selectedProjectIds || []);
+  const selectedIssues = issues.filter((item) => selectedIds.has(item.project.projectId));
+
+  syncReportConfigInputs(config);
+  els.reportProjectCount.textContent = projects.length;
+  els.reportTotalBudget.textContent = formatNumber(totalBudget);
+  els.reportTotalPlan.textContent = formatNumber(totalPlan);
+  els.reportSelectedCount.textContent = selectedIssues.length;
+  els.reportIssueCount.textContent = `${issues.length} vấn đề`;
+  els.reportPreviewTitle.textContent = config.title;
+  els.reportPreviewPeriod.textContent = config.period;
+  els.reportPreviewRecipient.textContent = config.recipient;
+
+  const isReady = Boolean(config.title && config.period && config.reportDate && selectedIssues.length);
+  els.reportReadiness.textContent = isReady ? "Sẵn sàng xuất" : "Đang rà soát";
+  els.reportReadiness.classList.toggle("is-ready", isReady);
+  els.toggleReportIssuesBtn.textContent = issues.length && selectedIssues.length === issues.length
+    ? "Bỏ chọn tất cả"
+    : "Chọn tất cả";
 
   els.periodicSummary.innerHTML = `
-    <strong>Ủy ban nhân dân Phường Bình Tân</strong><br>
-    Tổng hợp ${projects.length} dự án đầu tư công, tổng mức đầu tư khoảng <strong>${formatNumber(totalBudget)} tỷ đồng</strong>,
-    kế hoạch vốn năm báo cáo khoảng <strong>${formatNumber(totalPlan)} tỷ đồng</strong>.
-    Hiện có <strong>${alerts.length}</strong> dự án cần tiếp tục rà soát về tiến độ, pháp lý hoặc khả năng giải ngân.
+    Trong <strong>${escapeHtml(config.period)}</strong>, Ban Quản Lý Dự Án Phường Bình Tân đang theo dõi
+    <strong>${projects.length} dự án</strong> với tổng mức đầu tư khoảng
+    <strong>${formatNumber(totalBudget)} tỷ đồng</strong> và kế hoạch vốn khoảng
+    <strong>${formatNumber(totalPlan)} tỷ đồng</strong>. Qua rà soát, có
+    <strong>${alerts.length} dự án</strong> cần tập trung xử lý về tiến độ, pháp lý hoặc khả năng giải ngân.
   `;
 
-  const rows = alerts.length ? alerts : projects.slice(0, 5);
-  els.periodicRows.innerHTML = rows.length ? rows.map((project) => `
-    <div class="note-card">
-      <strong>${escapeHtml(project.name)}</strong>
-      <p>${escapeHtml(project.difficulty || project.progress || project.disbursement || "Dự án đang được cập nhật thông tin phục vụ báo cáo định kỳ.")}</p>
-    </div>
-  `).join("") : `<div class="note-card"><strong>Chưa có dữ liệu</strong><p>Upload phụ lục Excel hoặc nhập dự án để sinh nội dung báo cáo định kỳ.</p></div>`;
+  els.reportPreviewIssues.innerHTML = selectedIssues.length
+    ? selectedIssues.map((item, index) => `
+        <div class="report-preview-issue">
+          <span>${index + 1}.</span>
+          <div><strong>${escapeHtml(item.project.name)}:</strong> ${escapeHtml(item.description)}</div>
+        </div>
+      `).join("")
+    : `<div class="audit-empty">Chưa chọn nội dung trọng tâm đưa vào báo cáo.</div>`;
+
+  els.periodicRows.innerHTML = issues.length
+    ? issues.map((item) => {
+        const projectIndex = state.projects.indexOf(item.project);
+        const checked = selectedIds.has(item.project.projectId);
+        return `
+          <article class="report-issue-item">
+            <input type="checkbox" data-report-select="${escapeHtml(item.project.projectId)}" ${checked ? "checked" : ""} ${canEditProjects() ? "" : "disabled"} aria-label="Chọn dự án đưa vào báo cáo">
+            <div class="report-issue-copy">
+              <strong>${escapeHtml(item.project.name)}</strong>
+              <p>${escapeHtml(item.description)}</p>
+              <div class="report-issue-meta">
+                <span class="priority-badge ${item.priorityClass}">${escapeHtml(item.priority)}</span>
+                <span class="project-status ${statusClass(item.project.status)}">${escapeHtml(item.project.status || "Đang cập nhật")}</span>
+              </div>
+            </div>
+            <button class="report-open-project" data-report-open="${projectIndex}" type="button">Mở hồ sơ</button>
+          </article>
+        `;
+      }).join("")
+    : `<div class="audit-empty">Chưa có dữ liệu dự án để chuẩn bị báo cáo.</div>`;
+}
+
+function ensureReportConfiguration() {
+  state.reportConfig = state.reportConfig || {};
+  const today = new Date();
+  const defaultPeriod = `Tháng ${today.getMonth() + 1}/${today.getFullYear()}`;
+  state.reportConfig.title = state.reportConfig.title || "Báo cáo tiến độ các dự án đầu tư công";
+  state.reportConfig.period = state.reportConfig.period || defaultPeriod;
+  state.reportConfig.reportDate = state.reportConfig.reportDate || today.toISOString().slice(0, 10);
+  state.reportConfig.recipient = state.reportConfig.recipient || "Ủy ban nhân dân Phường Bình Tân";
+
+  if (!Array.isArray(state.reportConfig.selectedProjectIds)) {
+    const alerts = getAlertProjects();
+    const defaults = alerts.length ? alerts : state.projects.slice(0, 5);
+    state.reportConfig.selectedProjectIds = defaults.map((project) => project.projectId);
+  }
+
+  return state.reportConfig;
+}
+
+function syncReportConfigInputs(config) {
+  const values = {
+    reportTitleInput: config.title,
+    reportPeriodInput: config.period,
+    reportDateInput: config.reportDate,
+    reportRecipientInput: config.recipient
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (input && document.activeElement !== input) input.value = value || "";
+  });
+}
+
+function getReportIssues() {
+  return [...state.projects]
+    .sort((a, b) => reportPriorityScore(b) - reportPriorityScore(a))
+    .slice(0, 15)
+    .map((project) => {
+      const score = reportPriorityScore(project);
+      return {
+        project,
+        description: project.difficulty || project.progress || project.disbursement || "Dự án đang được cập nhật thông tin phục vụ báo cáo định kỳ.",
+        priority: score >= 3 ? "Khẩn" : score >= 2 ? "Cần xử lý" : "Theo dõi",
+        priorityClass: score >= 3 ? "is-high" : score >= 2 ? "" : "is-normal"
+      };
+    });
+}
+
+function reportPriorityScore(project) {
+  const text = normalizeText([
+    project.status,
+    project.evaluation,
+    project.difficulty,
+    project.progress,
+    project.disbursement
+  ].join(" "));
+  if (text.includes("cham") || text.includes("tam dung") || text.includes("khong bao dam")) return 3;
+  if (text.includes("vuong") || text.includes("can xu ly") || text.includes("ra soat")) return 2;
+  return 1;
+}
+
+function updateReportConfiguration() {
+  if (!canEditProjects()) return;
+  const config = ensureReportConfiguration();
+  config.title = els.reportTitleInput.value.trim();
+  config.period = els.reportPeriodInput.value.trim();
+  config.reportDate = els.reportDateInput.value;
+  config.recipient = els.reportRecipientInput.value.trim();
+  persistStateLocal();
+  clearTimeout(reportSaveTimer);
+  reportSaveTimer = setTimeout(() => saveRemoteState(), 600);
+  renderPeriodicReport();
+}
+
+function handleReportIssueSelection(event) {
+  if (!canEditProjects()) return;
+  const checkbox = event.target.closest("[data-report-select]");
+  if (!checkbox) return;
+  const config = ensureReportConfiguration();
+  const selected = new Set(config.selectedProjectIds || []);
+  if (checkbox.checked) selected.add(checkbox.dataset.reportSelect);
+  else selected.delete(checkbox.dataset.reportSelect);
+  config.selectedProjectIds = [...selected];
+  persistState();
+  renderPeriodicReport();
+}
+
+function toggleAllReportIssues() {
+  if (!canEditProjects()) return;
+  const config = ensureReportConfiguration();
+  const issueIds = getReportIssues().map((item) => item.project.projectId);
+  const selected = new Set(config.selectedProjectIds || []);
+  config.selectedProjectIds = issueIds.length && issueIds.every((id) => selected.has(id)) ? [] : issueIds;
+  persistState();
+  renderPeriodicReport();
+}
+
+function handleReportIssueOpen(event) {
+  const button = event.target.closest("[data-report-open]");
+  if (!button) return;
+  openProjectDetail(Number(button.dataset.reportOpen));
 }
 
 function renderSettings() {
@@ -976,11 +1133,18 @@ function exportCsv() {
 }
 
 function exportWord() {
+  const config = ensureReportConfiguration();
   const report = buildWordHtml();
-  downloadBlob(report, "bao-cao-du-an-binh-tan.doc", "application/msword;charset=utf-8");
+  const datePart = config.reportDate || new Date().toISOString().slice(0, 10);
+  downloadBlob(report, `bao-cao-du-an-binh-tan-${datePart}.doc`, "application/msword;charset=utf-8");
 }
 
 function buildWordHtml() {
+  const config = ensureReportConfiguration();
+  const selectedIds = new Set(config.selectedProjectIds || []);
+  const selectedIssues = getReportIssues().filter((item) => selectedIds.has(item.project.projectId));
+  const totalBudget = sum(state.projects, "budget");
+  const totalPlan = sum(state.projects, "plan");
   const rows = state.projects.map((p) => `
     <tr>
       <td>${p.stt}</td>
@@ -992,6 +1156,12 @@ function buildWordHtml() {
       <td>${escapeHtml(p.evaluation || p.status)}</td>
     </tr>
   `).join("");
+  const issueRows = selectedIssues.length
+    ? selectedIssues.map((item, index) => `
+        <p><strong>${index + 1}. ${escapeHtml(item.project.name)}</strong><br>
+        ${escapeHtml(item.description)}</p>
+      `).join("")
+    : "<p>Chưa lựa chọn nội dung trọng tâm.</p>";
 
   return `
     <html>
@@ -1000,16 +1170,28 @@ function buildWordHtml() {
       <style>
         body { font-family: "Times New Roman", serif; font-size: 13pt; }
         h1, h2 { text-align: center; }
+        h1 { font-size: 16pt; }
+        h2 { font-size: 14pt; }
+        .meta { text-align: right; font-style: italic; }
+        .summary { text-align: justify; line-height: 1.5; }
+        .signature { margin-top: 40px; width: 100%; }
+        .signature td { border: 0; text-align: center; }
         table { width: 100%; border-collapse: collapse; }
         td, th { border: 1px solid #000; padding: 6px; vertical-align: top; }
         th { font-weight: bold; text-align: center; }
       </style>
     </head>
     <body>
-      <p><strong>ỦY BAN NHÂN DÂN PHƯỜNG BÌNH TÂN</strong></p>
+      <p><strong>BAN QUẢN LÝ DỰ ÁN PHƯỜNG BÌNH TÂN</strong></p>
+      <p class="meta">${escapeHtml(config.period)} - Ngày ${escapeHtml(formatReportDate(config.reportDate))}</p>
       <h2>BÁO CÁO</h2>
-      <h1>Về tiến độ các dự án đầu tư công trên địa bàn phường Bình Tân</h1>
-      <p>${escapeHtml(state.reportText || "Nội dung thuyết minh sẽ được bổ sung từ file Word hoặc nhập trực tiếp trên hệ thống.")}</p>
+      <h1>${escapeHtml(config.title)}</h1>
+      <p class="summary">Trong ${escapeHtml(config.period)}, Ban Quản Lý Dự Án Phường Bình Tân đang theo dõi
+      <strong>${state.projects.length} dự án</strong>, tổng mức đầu tư khoảng <strong>${formatNumber(totalBudget)} tỷ đồng</strong>
+      và kế hoạch vốn khoảng <strong>${formatNumber(totalPlan)} tỷ đồng</strong>.</p>
+      <p class="summary">${escapeHtml(state.reportText || "Nội dung thuyết minh đang được tiếp tục rà soát, cập nhật theo hồ sơ dự án.")}</p>
+      <h2>NỘI DUNG CẦN TẬP TRUNG CHỈ ĐẠO</h2>
+      ${issueRows}
       <h2>PHỤ LỤC DỰ ÁN</h2>
       <table>
         <thead>
@@ -1025,9 +1207,21 @@ function buildWordHtml() {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      <table class="signature">
+        <tr>
+          <td style="text-align:left">Nơi nhận:<br><strong>${escapeHtml(config.recipient)}</strong></td>
+          <td><strong>NGƯỜI LẬP BÁO CÁO</strong><br><em>(Ký, ghi rõ họ tên)</em></td>
+        </tr>
+      </table>
     </body>
     </html>
   `;
+}
+
+function formatReportDate(value) {
+  if (!value) return new Date().toLocaleDateString("vi-VN");
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function clearData() {
@@ -1037,6 +1231,7 @@ function clearData() {
   state.files = [];
   state.importHistory = [];
   state.auditLog = [];
+  state.reportConfig = {};
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -1712,6 +1907,7 @@ function restoreStateFromLocal() {
     state.files = [];
     state.importHistory = [];
     state.auditLog = [];
+    state.reportConfig = {};
     normalizeProjectNumbers();
     return;
   }
@@ -1746,6 +1942,7 @@ function applySavedState(saved) {
   state.files = saved.files || [];
   state.importHistory = saved.importHistory || saved.sourceHistory || [];
   state.auditLog = saved.auditLog || [];
+  state.reportConfig = saved.reportConfig || {};
   els.reportText.value = state.reportText;
   normalizeProjectNumbers();
 }
@@ -1786,7 +1983,8 @@ function getSerializableState() {
     reportText: state.reportText,
     files: state.files,
     importHistory: state.importHistory,
-    auditLog: state.auditLog
+    auditLog: state.auditLog,
+    reportConfig: state.reportConfig
   };
 }
 
@@ -1926,6 +2124,7 @@ async function clearData() {
   state.files = [];
   state.importHistory = [];
   state.auditLog = [];
+  state.reportConfig = {};
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -2838,6 +3037,11 @@ function applyPermissionUI() {
     const element = document.getElementById(id);
     if (element) element.hidden = !editable;
   });
+  ["reportTitleInput", "reportPeriodInput", "reportDateInput", "reportRecipientInput"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.disabled = !editable;
+  });
+  if (els.toggleReportIssuesBtn) els.toggleReportIssuesBtn.hidden = !editable;
   updateProjectEditPermission();
 }
 

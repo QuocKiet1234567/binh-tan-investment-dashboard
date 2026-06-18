@@ -608,32 +608,79 @@
       </section>
 
       <section id="periodicView" class="view">
-        <div class="module-intro">
+        <div class="report-command">
           <div>
-            <span>Báo cáo định kỳ</span>
-            <strong>Tổng hợp nội dung để xếp trình bày</strong>
+            <span>Trung tâm báo cáo</span>
+            <h2>Chuẩn bị nội dung trình lãnh đạo</h2>
+            <p>Rà soát số liệu, chọn vấn đề trọng tâm và xuất báo cáo theo kỳ.</p>
           </div>
-          <em>Có thể xuất Word sau khi rà soát nội dung tóm tắt và danh sách cảnh báo.</em>
+          <div class="report-command-actions">
+            <button class="secondary-btn" data-jump="reportView" type="button">Chỉnh thuyết minh</button>
+            <button class="primary-btn" id="periodicExportBtn" type="button">Xuất báo cáo Word</button>
+          </div>
         </div>
-        <div class="report-layout">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Báo cáo định kỳ</h2>
-              <span>Mẫu tóm tắt phục vụ họp, trình ký và báo cáo cấp trên</span>
+
+        <section class="report-config">
+          <label class="report-title-field">Tên báo cáo
+            <input id="reportTitleInput" value="Báo cáo tiến độ các dự án đầu tư công">
+          </label>
+          <label>Kỳ báo cáo
+            <input id="reportPeriodInput" value="Tháng 6/2026">
+          </label>
+          <label>Ngày báo cáo
+            <input id="reportDateInput" type="date">
+          </label>
+          <label>Nơi nhận
+            <input id="reportRecipientInput" value="Ủy ban nhân dân Phường Bình Tân">
+          </label>
+        </section>
+
+        <div class="report-metrics">
+          <article><span>Dự án theo dõi</span><strong id="reportProjectCount">0</strong><em>Hồ sơ trong hệ thống</em></article>
+          <article><span>Tổng mức đầu tư</span><strong id="reportTotalBudget">0</strong><em>Tỷ đồng</em></article>
+          <article><span>Kế hoạch vốn</span><strong id="reportTotalPlan">0</strong><em>Tỷ đồng</em></article>
+          <article class="is-alert"><span>Nội dung trọng tâm</span><strong id="reportSelectedCount">0</strong><em>Đã chọn đưa vào báo cáo</em></article>
+        </div>
+
+        <div class="report-workspace">
+          <section class="report-preview-panel">
+            <div class="report-section-head">
+              <div>
+                <span>Bản xem trước</span>
+                <h2 id="reportPreviewTitle">Báo cáo tiến độ các dự án đầu tư công</h2>
+              </div>
+              <span id="reportReadiness" class="report-readiness">Đang rà soát</span>
             </div>
-            <div id="periodicSummary" class="report-summary"></div>
-            <div class="action-row">
-              <button class="primary-btn" id="periodicExportBtn" type="button">Xuất Word báo cáo</button>
-              <button class="secondary-btn" data-jump="reportView" type="button">Chỉnh thuyết minh</button>
+            <div class="report-paper">
+              <div class="report-paper-heading">
+                <strong>ỦY BAN NHÂN DÂN PHƯỜNG BÌNH TÂN</strong>
+                <span id="reportPreviewPeriod">Tháng 6/2026</span>
+              </div>
+              <div id="periodicSummary" class="report-summary"></div>
+              <div class="report-paper-section">
+                <h3>Nội dung cần tập trung chỉ đạo</h3>
+                <div id="reportPreviewIssues" class="report-preview-issues"></div>
+              </div>
+              <div class="report-signature">
+                <span>Nơi nhận: <b id="reportPreviewRecipient">Ủy ban nhân dân Phường Bình Tân</b></span>
+                <div><span>NGƯỜI LẬP BÁO CÁO</span><em>(Ký, ghi rõ họ tên)</em></div>
+              </div>
             </div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Danh sách nội dung cần nhấn mạnh</h2>
-              <span>Tự sinh từ cảnh báo và khó khăn</span>
+          <section class="report-issues-panel">
+            <div class="report-section-head">
+              <div>
+                <span>Danh sách rà soát</span>
+                <h2>Nội dung cần nhấn mạnh</h2>
+              </div>
+              <button id="toggleReportIssuesBtn" class="text-action" type="button">Chọn tất cả</button>
             </div>
-            <div id="periodicRows" class="presentation-notes"></div>
+            <div class="report-filter-row">
+              <span>Tự tổng hợp từ tiến độ, pháp lý và khả năng giải ngân</span>
+              <b id="reportIssueCount">0 vấn đề</b>
+            </div>
+            <div id="periodicRows" class="report-issue-list"></div>
           </section>
         </div>
       </section>
