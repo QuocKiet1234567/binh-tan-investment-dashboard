@@ -400,11 +400,15 @@
               </div>
               <h2 id="detailName">Tên dự án</h2>
               <p id="detailMeta">Phường Bình Tân | Chu kỳ thực hiện: 2026</p>
+              <p id="detailUpdated" class="detail-updated">Chưa có cập nhật thủ công</p>
             </div>
-            <div class="detail-money">
-              <span>Tổng mức đầu tư</span>
-              <strong id="detailBudget">0 VNĐ</strong>
-              <em id="detailStatus">Đang triển khai</em>
+            <div class="detail-head-actions">
+              <button id="editProjectBtn" class="secondary-btn" type="button">Chỉnh sửa dự án</button>
+              <div class="detail-money">
+                <span>Tổng mức đầu tư</span>
+                <strong id="detailBudget">0 VNĐ</strong>
+                <em id="detailStatus">Đang triển khai</em>
+              </div>
             </div>
           </div>
 
@@ -413,6 +417,7 @@
             <button class="detail-tab" data-tab="financePane">Tài chính và giải ngân</button>
             <button class="detail-tab" data-tab="contractPane">Gói thầu và hợp đồng</button>
             <button class="detail-tab" data-tab="progressPane">Tiến độ hiện trường</button>
+            <button class="detail-tab" data-tab="historyPane">Lịch sử cập nhật</button>
           </div>
 
           <div id="legalPane" class="detail-pane active">
@@ -471,8 +476,55 @@
               <div class="site-photos"><div>Ảnh thi công 1</div><div>Ảnh thi công 2</div></div>
             </div>
           </div>
+
+          <div id="historyPane" class="detail-pane">
+            <div class="audit-head">
+              <div>
+                <h3>Lịch sử cập nhật dự án</h3>
+                <p>Ghi nhận tài khoản, thời gian và nội dung thay đổi.</p>
+              </div>
+              <span id="projectAuditCount">0 cập nhật</span>
+            </div>
+            <div id="projectAuditList" class="audit-list"></div>
+          </div>
         </section>
       </section>
+
+      <div id="projectEditModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="projectEditTitle">
+        <form id="projectEditForm" class="project-edit-modal">
+          <div class="modal-head">
+            <div>
+              <span>Cập nhật hồ sơ</span>
+              <h2 id="projectEditTitle">Chỉnh sửa dự án</h2>
+            </div>
+            <button id="closeProjectEditBtn" class="icon-close" type="button" aria-label="Đóng">&times;</button>
+          </div>
+          <div class="project-form-grid">
+            <label class="span-2">Tên dự án<input id="editProjectName" name="name" required></label>
+            <label>Chu kỳ thực hiện<input id="editProjectPeriod" name="period" placeholder="2026"></label>
+            <label>Tổng mức đầu tư (tỷ đồng)<input id="editProjectBudget" name="budget" inputmode="decimal"></label>
+            <label>Kế hoạch vốn (tỷ đồng)<input id="editProjectPlan" name="plan" inputmode="decimal"></label>
+            <label>Trạng thái
+              <select id="editProjectStatus" name="status">
+                <option>Đang triển khai</option>
+                <option>Đảm bảo tiến độ</option>
+                <option>Cần xử lý</option>
+                <option>Chậm tiến độ</option>
+                <option>Hoàn thành</option>
+              </select>
+            </label>
+            <label class="span-2">Hồ sơ pháp lý<textarea id="editProjectLegal" name="legal"></textarea></label>
+            <label class="span-2">Tiến độ thực hiện<textarea id="editProjectProgress" name="progress"></textarea></label>
+            <label class="span-2">Tình hình giải ngân<textarea id="editProjectDisbursement" name="disbursement"></textarea></label>
+            <label class="span-2">Khó khăn, vướng mắc<textarea id="editProjectDifficulty" name="difficulty"></textarea></label>
+            <label class="span-2">Giải pháp, kiến nghị<textarea id="editProjectSolution" name="solution"></textarea></label>
+          </div>
+          <div class="modal-actions">
+            <button id="cancelProjectEditBtn" class="secondary-btn" type="button">Hủy</button>
+            <button class="primary-btn" type="submit">Lưu cập nhật</button>
+          </div>
+        </form>
+      </div>
 
       <section id="reportView" class="view">
         <div class="report-layout">

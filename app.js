@@ -18,6 +18,7 @@ const state = {
   reportText: "",
   files: [],
   importHistory: [],
+  auditLog: [],
   selectedProjectId: null,
   charts: {
     status: null,
@@ -180,6 +181,13 @@ function bindEvents() {
     await handleProjectAssetFiles([...event.target.files], "photo");
     event.target.value = "";
   });
+  document.getElementById("editProjectBtn")?.addEventListener("click", openProjectEditModal);
+  document.getElementById("projectEditForm")?.addEventListener("submit", saveProjectEdits);
+  document.getElementById("closeProjectEditBtn")?.addEventListener("click", closeProjectEditModal);
+  document.getElementById("cancelProjectEditBtn")?.addEventListener("click", closeProjectEditModal);
+  document.getElementById("projectEditModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "projectEditModal") closeProjectEditModal();
+  });
 
   ["dragenter", "dragover"].forEach((name) => {
     els.dropZone.addEventListener(name, (event) => {
@@ -240,6 +248,7 @@ function showLogin() {
 function showApp() {
   els.loginScreen.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  applyPermissionUI();
   renderAll();
 }
 
@@ -587,6 +596,7 @@ function mergeProjects(incoming) {
 function normalizeProjectNumbers() {
   state.projects = state.projects.map((project, index) => ({
     ...project,
+    projectId: project.projectId || createProjectId(),
     stt: index + 1,
     plan: sanitizePlanValue(project.plan),
     status: project.status || deriveStatus(project)
@@ -1020,6 +1030,7 @@ function clearData() {
   state.reportText = "";
   state.files = [];
   state.importHistory = [];
+  state.auditLog = [];
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -1694,6 +1705,7 @@ function restoreStateFromLocal() {
     state.reportText = "";
     state.files = [];
     state.importHistory = [];
+    state.auditLog = [];
     normalizeProjectNumbers();
     return;
   }
@@ -1717,7 +1729,8 @@ function hasUsefulState(saved) {
     saved.projects?.length ||
     saved.reportText ||
     saved.files?.length ||
-    saved.importHistory?.length
+    saved.importHistory?.length ||
+    saved.auditLog?.length
   ));
 }
 
@@ -1726,6 +1739,7 @@ function applySavedState(saved) {
   state.reportText = saved.reportText || "";
   state.files = saved.files || [];
   state.importHistory = saved.importHistory || saved.sourceHistory || [];
+  state.auditLog = saved.auditLog || [];
   els.reportText.value = state.reportText;
   normalizeProjectNumbers();
 }
@@ -1765,7 +1779,8 @@ function getSerializableState() {
     projects: state.projects,
     reportText: state.reportText,
     files: state.files,
-    importHistory: state.importHistory
+    importHistory: state.importHistory,
+    auditLog: state.auditLog
   };
 }
 
@@ -1904,6 +1919,7 @@ async function clearData() {
   state.reportText = "";
   state.files = [];
   state.importHistory = [];
+  state.auditLog = [];
   els.reportText.value = "";
   els.analysisLog.innerHTML = "";
   els.analysisStatus.textContent = "Chưa có dữ liệu";
@@ -2785,6 +2801,281 @@ function renderCharts() {
   els.budgetSummary.querySelectorAll("[data-chart-detail]").forEach((row) => {
     row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
   });
+}
+
+function createProjectId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getCurrentUserRole() {
+  return currentSession?.user?.app_metadata?.role
+    || currentSession?.user?.user_metadata?.role
+    || "admin";
+}
+
+function canEditProjects() {
+  return ["admin", "editor"].includes(String(getCurrentUserRole()).toLowerCase());
+}
+
+function applyPermissionUI() {
+  const editable = canEditProjects();
+  [
+    "addProjectBtn",
+    "chooseFileBtn",
+    "syncSheetBtn",
+    "clearDataBtn",
+    "settingsClearBtn",
+    "detailFileBtn",
+    "detailPhotoBtn"
+  ].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) element.hidden = !editable;
+  });
+  updateProjectEditPermission();
+}
+
+function updateProjectEditPermission() {
+  const button = document.getElementById("editProjectBtn");
+  if (!button) return;
+  button.hidden = !canEditProjects();
+}
+
+function getSelectedProject() {
+  const index = Number(state.selectedProjectId);
+  if (!Number.isInteger(index)) return null;
+  return state.projects[index] || null;
+}
+
+function openProjectEditModal() {
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
+
+  const project = getSelectedProject();
+  const modal = document.getElementById("projectEditModal");
+  if (!project || !modal) return;
+
+  project.projectId = project.projectId || createProjectId();
+  document.getElementById("editProjectName").value = project.name || "";
+  document.getElementById("editProjectPeriod").value = project.period || "2026";
+  document.getElementById("editProjectBudget").value = project.budget ?? "";
+  document.getElementById("editProjectPlan").value = project.plan ?? "";
+  const statusSelect = document.getElementById("editProjectStatus");
+  const currentStatus = project.status || "Đang triển khai";
+  if (![...statusSelect.options].some((option) => option.value === currentStatus)) {
+    statusSelect.add(new Option(currentStatus, currentStatus));
+  }
+  statusSelect.value = currentStatus;
+  document.getElementById("editProjectLegal").value = project.legal || "";
+  document.getElementById("editProjectProgress").value = project.progress || "";
+  document.getElementById("editProjectDisbursement").value = project.disbursement || "";
+  document.getElementById("editProjectDifficulty").value = project.difficulty || "";
+  document.getElementById("editProjectSolution").value = project.solution || "";
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  document.getElementById("editProjectName").focus();
+}
+
+function closeProjectEditModal() {
+  document.getElementById("projectEditModal")?.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+async function saveProjectEdits(event) {
+  event.preventDefault();
+  if (!canEditProjects()) return;
+
+  const project = getSelectedProject();
+  if (!project) return;
+
+  const fields = {
+    name: document.getElementById("editProjectName").value.trim(),
+    period: document.getElementById("editProjectPeriod").value.trim(),
+    budget: toNumber(document.getElementById("editProjectBudget").value),
+    plan: toNumber(document.getElementById("editProjectPlan").value),
+    status: document.getElementById("editProjectStatus").value,
+    legal: document.getElementById("editProjectLegal").value.trim(),
+    progress: document.getElementById("editProjectProgress").value.trim(),
+    disbursement: document.getElementById("editProjectDisbursement").value.trim(),
+    difficulty: document.getElementById("editProjectDifficulty").value.trim(),
+    solution: document.getElementById("editProjectSolution").value.trim()
+  };
+
+  if (!fields.name) {
+    alert("Tên dự án không được để trống.");
+    return;
+  }
+
+  const labels = {
+    name: "Tên dự án",
+    period: "Chu kỳ thực hiện",
+    budget: "Tổng mức đầu tư",
+    plan: "Kế hoạch vốn",
+    status: "Trạng thái",
+    legal: "Hồ sơ pháp lý",
+    progress: "Tiến độ thực hiện",
+    disbursement: "Tình hình giải ngân",
+    difficulty: "Khó khăn, vướng mắc",
+    solution: "Giải pháp, kiến nghị"
+  };
+  const changes = Object.entries(fields)
+    .filter(([key, value]) => stringify(project[key]) !== stringify(value))
+    .map(([key, value]) => ({
+      field: key,
+      label: labels[key],
+      before: project[key] ?? "",
+      after: value
+    }));
+
+  if (!changes.length) {
+    closeProjectEditModal();
+    return;
+  }
+
+  Object.assign(project, fields, {
+    projectId: project.projectId || createProjectId(),
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentSession?.user?.email || "Tài khoản quản trị"
+  });
+
+  state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
+  state.auditLog.unshift({
+    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    projectId: project.projectId,
+    action: "Cập nhật dự án",
+    changedAt: project.updatedAt,
+    userId: currentSession?.user?.id || "",
+    userEmail: project.updatedBy,
+    changes
+  });
+
+  normalizeProjectNumbers();
+  persistStateLocal();
+  const saved = await saveRemoteState();
+  renderAll();
+  renderProjectDetail(project);
+  closeProjectEditModal();
+
+  if (!saved) {
+    alert("Thay đổi đang được giữ trên trình duyệt nhưng chưa đồng bộ lên Supabase. Kiểm tra mạng hoặc tải lại để xử lý xung đột.");
+  }
+}
+
+function renderProjectAudit(project) {
+  const list = document.getElementById("projectAuditList");
+  const count = document.getElementById("projectAuditCount");
+  const updated = document.getElementById("detailUpdated");
+  if (!list || !count || !project) return;
+
+  const rows = (state.auditLog || [])
+    .filter((entry) => entry.projectId === project.projectId)
+    .sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+
+  count.textContent = `${rows.length} cập nhật`;
+  if (updated) {
+    const latest = rows[0];
+    updated.textContent = latest
+      ? `Cập nhật gần nhất: ${formatDateTimeLabel(latest.changedAt)} bởi ${latest.userEmail || "Tài khoản quản trị"}`
+      : "Chưa có cập nhật thủ công";
+  }
+  if (!rows.length) {
+    list.innerHTML = `<div class="audit-empty">Chưa có thay đổi thủ công nào được ghi nhận cho dự án này.</div>`;
+    return;
+  }
+
+  list.innerHTML = rows.map((entry) => {
+    const initials = String(entry.userEmail || "QT")
+      .split(/[\s@._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "QT";
+    return `
+      <article class="audit-item">
+        <div class="audit-avatar">${escapeHtml(initials)}</div>
+        <div>
+          <div class="audit-meta">
+            <div>
+              <strong>${escapeHtml(entry.action || "Cập nhật dự án")}</strong>
+              <span>${escapeHtml(entry.userEmail || "Tài khoản quản trị")}</span>
+            </div>
+            <time datetime="${escapeHtml(entry.changedAt)}">${escapeHtml(formatDateTimeLabel(entry.changedAt))}</time>
+          </div>
+          <div class="audit-changes">
+            ${(entry.changes || []).map((change) => `
+              <div class="audit-change">
+                <b>${escapeHtml(change.label || change.field)}:</b>
+                ${escapeHtml(compactAuditValue(change.before))} → ${escapeHtml(compactAuditValue(change.after))}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function compactAuditValue(value) {
+  const text = stringify(value).trim() || "Chưa có";
+  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+}
+
+function appendProjectAudit(project, action, changes) {
+  if (!project) return;
+  project.projectId = project.projectId || createProjectId();
+  const changedAt = new Date().toISOString();
+  project.updatedAt = changedAt;
+  project.updatedBy = currentSession?.user?.email || "Tài khoản quản trị";
+  state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
+  state.auditLog.unshift({
+    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    projectId: project.projectId,
+    action,
+    changedAt,
+    userId: currentSession?.user?.id || "",
+    userEmail: project.updatedBy,
+    changes
+  });
+}
+
+function addProject() {
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
+
+  const project = {
+    projectId: createProjectId(),
+    stt: state.projects.length + 1,
+    name: "Dự án mới",
+    period: "2026",
+    budget: 0,
+    plan: 0,
+    legal: "",
+    progress: "",
+    disbursement: "",
+    difficulty: "",
+    solution: "",
+    evaluation: "Đang cập nhật",
+    status: "Đang triển khai"
+  };
+  state.projects.push(project);
+  state.auditLog = Array.isArray(state.auditLog) ? state.auditLog : [];
+  state.auditLog.unshift({
+    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    projectId: project.projectId,
+    action: "Tạo dự án",
+    changedAt: new Date().toISOString(),
+    userId: currentSession?.user?.id || "",
+    userEmail: currentSession?.user?.email || "Tài khoản quản trị",
+    changes: [{ field: "name", label: "Dự án", before: "", after: project.name }]
+  });
+  persistState();
+  renderAll();
+  openProjectDetail(state.projects.length - 1);
+  openProjectEditModal();
 }
 
 async function handleFiles(files) {
@@ -3811,6 +4102,10 @@ function getProjectStorageCode(project, index = -1) {
 }
 
 async function handleProjectAssetFiles(files, kind) {
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
   const { project, index } = getActiveProjectForAssets();
   if (!project || !files.length) return;
 
@@ -3821,6 +4116,7 @@ async function handleProjectAssetFiles(files, kind) {
     const collectionName = kind === "photo" ? "photos" : "attachments";
     project[collectionName] = Array.isArray(project[collectionName]) ? project[collectionName] : [];
     const collection = project[collectionName];
+    const uploadedNames = [];
     const selectedSlot = pendingProjectAssetSlot?.kind === kind ? pendingProjectAssetSlot.slot : null;
     pendingProjectAssetSlot = null;
 
@@ -3831,6 +4127,7 @@ async function handleProjectAssetFiles(files, kind) {
         type: file.type || "",
         uploadedAt: new Date().toISOString()
       };
+      uploadedNames.push(file.name);
 
       try {
         Object.assign(record, await uploadProjectAsset(file, project, kind));
@@ -3867,6 +4164,12 @@ async function handleProjectAssetFiles(files, kind) {
       }
     }
 
+    appendProjectAudit(project, kind === "photo" ? "Cập nhật ảnh hiện trường" : "Cập nhật hồ sơ đính kèm", [{
+      field: collectionName,
+      label: kind === "photo" ? "Ảnh hiện trường" : "File hồ sơ",
+      before: "",
+      after: uploadedNames.join(", ")
+    }]);
     persistStateLocal();
     const saved = await saveRemoteState();
     if (!saved && currentSession) {
@@ -3881,6 +4184,10 @@ async function handleProjectAssetFiles(files, kind) {
 
 async function handleProjectAssetDelete(event) {
   event.preventDefault();
+  if (!canEditProjects()) {
+    alert("Tài khoản hiện tại chỉ có quyền xem.");
+    return;
+  }
   const kind = event.currentTarget.dataset.assetKind;
   const index = Number(event.currentTarget.dataset.assetIndex);
   const { project } = getActiveProjectForAssets();
@@ -3894,6 +4201,12 @@ async function handleProjectAssetDelete(event) {
   try {
     await removeStoredAsset(asset);
     project[collection].splice(index, 1);
+    appendProjectAudit(project, kind === "photo" ? "Xóa ảnh hiện trường" : "Xóa file hồ sơ", [{
+      field: collection,
+      label: kind === "photo" ? "Ảnh hiện trường" : "File hồ sơ",
+      before: asset.name,
+      after: "Đã xóa"
+    }]);
     persistStateLocal();
     await saveRemoteState();
     renderProjectDetail(project);
@@ -3992,6 +4305,8 @@ function renderProjectDetail(project) {
   els.detailProgressBar.style.width = `${progressRate}%`;
   els.detailDifficulty.textContent = project.difficulty || project.progress || "Chưa ghi nhận khó khăn lớn.";
   renderProjectAssets(project);
+  renderProjectAudit(project);
+  updateProjectEditPermission();
 }
 
 async function renderProjectPhotos(project) {
