@@ -21,6 +21,7 @@ const state = {
   importHistory: [],
   auditLog: [],
   reportConfig: {},
+  electronicForm: {},
   selectedProjectId: null,
   charts: {
     status: null,
@@ -291,6 +292,7 @@ function switchView(viewId) {
     dashboardView: ["Bảng điều khiển tổng quan", ""],
     importView: ["Nhập & phân tích file", "Đọc Excel phụ lục và Word thuyết minh để tạo dữ liệu báo cáo."],
     projectsView: ["Danh mục dự án", "Bảng quản lý chính của toàn bộ dự án."],
+    electronicFormView: ["Biểu mẫu điện tử", "Nhập và quản lý biểu mẫu báo cáo trực tiếp theo dạng bảng tính."],
     reportView: ["Báo cáo trình bày", "Tổng hợp nội dung để xếp sử dụng khi thuyết trình."],
     projectDetailView: ["Chi tiết hồ sơ dự án", ""],
     capitalView: ["Kế hoạch vốn", "Theo dõi kế hoạch vốn, giải ngân và điều chỉnh trong kỳ."],
@@ -353,7 +355,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -512,8 +514,12 @@ function extractProjectsFromRows(rows) {
   }
 
   const header = rows[headerIndex] || [];
+  const columnHeaders = buildColumnHeaders(rows, headerIndex);
   const nameIndex = findHeaderIndex(header, ["ten du an"]) ?? guessProjectNameIndex(rows, headerIndex + 1) ?? 2;
-  const budgetIndex = findHeaderIndex(header, ["tong muc dau tu"]) ?? 3;
+  const budgetIndex = findColumnHeaderIndex(columnHeaders, ["tong muc dau tu"])
+    ?? findHeaderIndex(header, ["tong muc dau tu"])
+    ?? 3;
+  const totalPlanIndex = findColumnHeaderIndex(columnHeaders, ["tong", "ke hoach", "von", "2026"]);
 
   for (let index = Math.max(headerIndex + 1, 0); index < rows.length; index += 1) {
     const row = rows[index];
@@ -527,6 +533,8 @@ function extractProjectsFromRows(rows) {
       .slice(budgetIndex + 1, planEndIndex)
       .map(toPlanNumber)
       .filter((value) => value > 0);
+    const hasTotalPlan = totalPlanIndex != null && stringify(row[totalPlanIndex]) !== "";
+    const totalPlan = hasTotalPlan ? toPlanNumber(row[totalPlanIndex]) : 0;
     const legalIndex = findFirstTextIndex(row, ["phê duyệt", "chủ trương", "pháp lý"], Math.max(5, periodIndex + 1));
     const progressIndex = findFirstTextIndex(row, ["đang", "chậm", "hoàn", "dự kiến", "tạm dừng", "rà soát"], legalIndex + 1);
     const evaluationIndex = findFirstTextIndex(row, ["đảm bảo", "chậm", "không"], progressIndex + 1);
@@ -535,7 +543,7 @@ function extractProjectsFromRows(rows) {
       stt: projects.length + 1,
       name,
       budget: toMoneyNumber(row[budgetIndex]) || toNumber(row[budgetIndex]),
-      plan: planCandidates.length ? planCandidates[planCandidates.length - 1] : 0,
+      plan: hasTotalPlan ? totalPlan : (planCandidates.length ? planCandidates[planCandidates.length - 1] : 0),
       legal: stringify(row[legalIndex] || ""),
       progress: stringify(row[progressIndex] || ""),
       disbursement: stringify(row[progressIndex + 1] || ""),
@@ -550,6 +558,32 @@ function extractProjectsFromRows(rows) {
   }
 
   return projects;
+}
+
+function buildColumnHeaders(rows, headerIndex) {
+  const start = Math.max(0, headerIndex - 4);
+  const end = Math.min(rows.length - 1, headerIndex + 1);
+  const columnCount = rows
+    .slice(start, end + 1)
+    .reduce((maximum, row) => Math.max(maximum, row.length), 0);
+
+  return Array.from({ length: columnCount }, (_, columnIndex) => {
+    const parts = [];
+    for (let rowIndex = start; rowIndex <= end; rowIndex += 1) {
+      const text = stringify(rows[rowIndex]?.[columnIndex]);
+      if (text && !parts.includes(text)) parts.push(text);
+    }
+    return normalizeText(parts.join(" "));
+  });
+}
+
+function findColumnHeaderIndex(columnHeaders, terms) {
+  const normalizedTerms = terms.map(normalizeText);
+  const indexes = [];
+  columnHeaders.forEach((text, index) => {
+    if (normalizedTerms.every((term) => text.includes(term))) indexes.push(index);
+  });
+  return indexes.length ? indexes[indexes.length - 1] : null;
 }
 
 function isProjectRow(row, name) {
@@ -646,11 +680,10 @@ function renderDashboard() {
   const totalBudget = sum(projects, "budget");
   const totalPlan = sum(projects, "plan");
   const alerts = getAlertProjects();
-  const healthyRate = projects.length ? Math.round(((projects.length - alerts.length) / projects.length) * 100) : 0;
 
   els.kpiProjects.textContent = projects.length;
   els.kpiBudget.textContent = formatNumber(totalBudget);
-  els.kpiPlan.textContent = `${healthyRate}%`;
+  els.kpiPlan.textContent = formatNumber(totalPlan);
   els.kpiAlerts.textContent = alerts.length;
 
   els.sourceSummary.textContent = projects.length
@@ -675,7 +708,7 @@ function renderAlerts(alerts) {
   `).join("");
 }
 
-function renderCharts() {
+function renderChartsLegacyV1() {
   const statusCounts = countBy(state.projects, "status");
   const labels = Object.keys(statusCounts);
   const values = Object.values(statusCounts);
@@ -1597,7 +1630,7 @@ function buildStatusBuckets(projects) {
   return buckets.filter((item) => item.value > 0);
 }
 
-function renderCharts() {
+function renderChartsLegacyV2() {
   const statusBuckets = buildStatusBuckets(state.projects);
   const labels = statusBuckets.map((item) => item.label);
   const values = statusBuckets.map((item) => item.value);
@@ -1951,6 +1984,7 @@ function applySavedState(saved) {
   state.importHistory = saved.importHistory || saved.sourceHistory || [];
   state.auditLog = saved.auditLog || [];
   state.reportConfig = saved.reportConfig || {};
+  state.electronicForm = saved.electronicForm || {};
   els.reportText.value = state.reportText;
   normalizeProjectNumbers();
 }
@@ -1992,7 +2026,8 @@ function getSerializableState() {
     files: state.files,
     importHistory: state.importHistory,
     auditLog: state.auditLog,
-    reportConfig: state.reportConfig
+    reportConfig: state.reportConfig,
+    electronicForm: state.electronicForm
   };
 }
 
@@ -2071,7 +2106,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -2824,7 +2859,7 @@ function showDetailTab(tabId) {
   }
 }
 
-function renderCharts() {
+function renderChartsLegacyV3() {
   const statusBuckets = buildStatusBuckets(state.projects);
   const labels = statusBuckets.map((item) => item.label);
   const values = statusBuckets.map((item) => item.value);
@@ -3039,6 +3074,10 @@ function applyPermissionUI() {
     "clearDataBtn",
     "settingsClearBtn",
     "settingsRestoreBtn",
+    "formAddRowBtn",
+    "formDeleteRowBtn",
+    "formSaveBtn",
+    "formSyncProjectsBtn",
     "detailFileBtn",
     "detailPhotoBtn"
   ].forEach((id) => {
@@ -3564,7 +3603,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -3667,6 +3706,30 @@ function mergeProjects(incoming) {
     });
   });
   return [...map.values()];
+}
+
+function replaceProjectsFromExcelImport(incoming) {
+  const existingByName = new Map(
+    state.projects.map((project) => [normalizeText(project.name), project])
+  );
+  const importedByName = new Map();
+
+  incoming.forEach((project) => {
+    const key = normalizeText(project.name);
+    if (!key) return;
+    const existing = existingByName.get(key) || {};
+    const previousImported = importedByName.get(key) || {};
+    importedByName.set(key, {
+      ...existing,
+      ...previousImported,
+      ...project,
+      projectId: existing.projectId || previousImported.projectId || project.projectId || createProjectId(),
+      attachments: existing.attachments || previousImported.attachments || project.attachments || [],
+      photos: existing.photos || previousImported.photos || project.photos || []
+    });
+  });
+
+  return [...importedByName.values()];
 }
 
 async function handleGoogleSheetSync() {
@@ -3812,7 +3875,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -4035,7 +4098,7 @@ async function deleteImportHistory(id) {
   }
 }
 
-function renderCharts() {
+function renderChartsLegacyV4() {
   const hasProjects = state.projects.length > 0;
   const statusBuckets = buildStatusBuckets(state.projects);
   const labels = statusBuckets.map((item) => item.label);
@@ -4311,7 +4374,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -4398,7 +4461,7 @@ async function handleFiles(files) {
   }
 
   if (parsedProjects.length) {
-    state.projects = mergeProjects(parsedProjects);
+    state.projects = replaceProjectsFromExcelImport(parsedProjects);
     normalizeProjectNumbers();
   }
 
@@ -4786,8 +4849,12 @@ function renderCharts() {
   const values = statusBuckets.map((item) => item.value);
   const colors = statusBuckets.map((item) => item.color);
   const top = [...state.projects]
+    .filter((project) => toNumber(project.plan) > 0)
     .sort((a, b) => toNumber(b.plan) - toNumber(a.plan))
-    .slice(0, 10);
+    .slice(0, 6);
+  const plannedValues = top.map((project) => toNumber(project.plan));
+  const disbursementRates = top.map((project) => deriveDisbursementRate(project));
+  const disbursedValues = top.map((project, index) => plannedValues[index] * disbursementRates[index] / 100);
 
   const centerTextPlugin = {
     id: "centerTextPlugin",
@@ -4809,19 +4876,43 @@ function renderCharts() {
     }
   };
 
-  const compactBarValuePlugin = {
-    id: "compactBarValuePlugin",
-    afterDatasetsDraw(chart) {
-      const { ctx } = chart;
+  const emptyCapitalChartPlugin = {
+    id: "emptyCapitalChartPlugin",
+    afterDraw(chart, args, options) {
+      if (!options?.show || !chart.chartArea) return;
+      const { ctx, chartArea } = chart;
+      const centerX = (chartArea.left + chartArea.right) / 2;
+      const centerY = (chartArea.top + chartArea.bottom) / 2;
       ctx.save();
       ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillStyle = "#0f172a";
-      ctx.font = "800 9px Inter, system-ui, sans-serif";
-      chart.getDatasetMeta(0).data.forEach((bar, index) => {
-        const value = chart.data.datasets[0].data[index];
-        if (!value || !bar || bar.y < 18) return;
-        ctx.fillText(`${formatNumber(value)}`, bar.x, bar.y - 5);
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#475569";
+      ctx.font = "800 13px Inter, system-ui, sans-serif";
+      ctx.fillText("Chưa có dữ liệu kế hoạch vốn", centerX, centerY - 8);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 11px Inter, system-ui, sans-serif";
+      ctx.fillText("Nhập Excel hoặc đồng bộ Google Sheet để hiển thị biểu đồ", centerX, centerY + 14);
+      ctx.restore();
+    }
+  };
+
+  const disbursementRatePlugin = {
+    id: "disbursementRatePlugin",
+    afterDatasetsDraw(chart) {
+      if (!top.length || !chart.chartArea) return;
+      const { ctx, chartArea } = chart;
+      const bars = chart.getDatasetMeta(1)?.data || [];
+      ctx.save();
+      ctx.textBaseline = "middle";
+      ctx.font = "800 10px Inter, system-ui, sans-serif";
+      bars.forEach((bar, index) => {
+        if (!bar || !disbursedValues[index]) return;
+        const rateLabel = `${formatNumber(disbursementRates[index])}%`;
+        const roomOutside = chartArea.right - bar.x;
+        const drawInside = roomOutside < 38;
+        ctx.textAlign = drawInside ? "right" : "left";
+        ctx.fillStyle = drawInside ? "#ffffff" : "#1e3a8a";
+        ctx.fillText(rateLabel, drawInside ? bar.x - 5 : bar.x + 6, bar.y);
       });
       ctx.restore();
     }
@@ -4868,51 +4959,96 @@ function renderCharts() {
   state.charts.budget = new Chart(document.getElementById("budgetChart"), {
     type: "bar",
     data: {
-      labels: top.length ? top.map((project, index) => `${index + 1}`) : ["0"],
+      labels: top.map((project) => compactSentence(project.name, 34)),
       datasets: [{
         label: "Kế hoạch vốn",
-        data: top.length ? top.map((project) => toNumber(project.plan)) : [0],
-        backgroundColor: "#2563eb",
-        borderColor: "#1d4ed8",
-        borderWidth: 1,
+        data: plannedValues,
+        backgroundColor: "#1e3a8a",
+        borderColor: "#172554",
+        borderWidth: 0,
         borderRadius: 7,
-        maxBarThickness: 22
+        borderSkipped: false,
+        maxBarThickness: 15
+      }, {
+        label: "Giải ngân ước tính",
+        data: disbursedValues,
+        backgroundColor: "#60a5fa",
+        borderColor: "#3b82f6",
+        borderWidth: 0,
+        borderRadius: 7,
+        borderSkipped: false,
+        maxBarThickness: 15
       }]
     },
     options: {
+      indexAxis: "y",
       maintainAspectRatio: false,
+      interaction: { mode: "nearest", axis: "y", intersect: false },
       onClick: (event, elements) => {
         const item = elements?.[0];
         if (!item || !top[item.index]) return;
         openProjectDetail(state.projects.indexOf(top[item.index]));
       },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: top.length > 0,
+          position: "top",
+          align: "start",
+          labels: {
+            boxWidth: 9,
+            boxHeight: 9,
+            usePointStyle: true,
+            pointStyle: "rectRounded",
+            padding: 18,
+            color: "#475569",
+            font: { size: 11, weight: "700" }
+          }
+        },
+        emptyCapitalChartPlugin: { show: !top.length },
         tooltip: {
+          backgroundColor: "#0f172a",
+          padding: 12,
+          titleFont: { size: 12, weight: "800" },
+          bodyFont: { size: 11, weight: "600" },
           callbacks: {
             title: (items) => top[items[0].dataIndex]?.name || "",
-            label: (item) => ` Kế hoạch vốn: ${formatNumber(item.raw)} tỷ đồng`,
-            afterBody: () => "Bấm cột để mở chi tiết dự án"
+            label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} tỷ đồng`,
+            afterBody: (items) => {
+              const index = items[0]?.dataIndex;
+              return index == null ? "" : `Tỷ lệ giải ngân ước tính: ${formatNumber(disbursementRates[index])}%`;
+            },
+            footer: () => "Bấm thanh để mở chi tiết dự án"
           }
         }
       },
-      layout: { padding: { top: 14, right: 8 } },
+      layout: { padding: { top: 2, right: 44, bottom: 4 } },
       scales: {
         x: {
-          grid: { display: false },
-          ticks: { font: { size: 10, weight: "800" } },
-          title: { display: true, text: "Thứ tự dự án trong danh sách bên dưới", color: "#64748b", font: { size: 10, weight: "700" } }
+          display: top.length > 0,
+          beginAtZero: true,
+          grace: "12%",
+          grid: { color: "rgba(148, 163, 184, .18)", drawBorder: false },
+          border: { display: false },
+          ticks: {
+            color: "#64748b",
+            font: { size: 10, weight: "600" },
+            callback: (value) => `${formatNumber(value)} tỷ`
+          }
         },
         y: {
-          beginAtZero: true,
-          grace: "18%",
-          grid: { color: "#edf2f7" },
-          ticks: { font: { size: 10 }, callback: (value) => formatNumber(value) },
-          title: { display: true, text: "Tỷ đồng", color: "#64748b", font: { size: 10, weight: "700" } }
+          display: top.length > 0,
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            color: "#334155",
+            autoSkip: false,
+            font: { size: 10, weight: "700" },
+            padding: 8
+          }
         }
       }
     },
-    plugins: [compactBarValuePlugin]
+    plugins: [disbursementRatePlugin, emptyCapitalChartPlugin]
   });
 
   els.statusSummary.innerHTML = statusBuckets.map((item) => {
@@ -4928,28 +5064,35 @@ function renderCharts() {
     `;
   }).join("");
 
-  const totalPlannedTop = top.reduce((sum, project) => sum + toNumber(project.plan), 0);
+  const totalPlannedTop = plannedValues.reduce((sum, value) => sum + value, 0);
+  const totalDisbursedTop = disbursedValues.reduce((sum, value) => sum + value, 0);
+  const averageDisbursementRate = totalPlannedTop ? totalDisbursedTop / totalPlannedTop * 100 : 0;
   const leadProject = top[0];
-  els.budgetSummary.innerHTML = `
-    <div class="chart-note chart-note-strong"><strong>Top ${top.length || 0} kế hoạch vốn:</strong> ${formatNumber(totalPlannedTop)} tỷ đồng</div>
-    <div class="chart-project-list">
-      ${top.map((project, index) => {
-        const plan = toNumber(project.plan);
-        const projectIndex = state.projects.indexOf(project);
-        return `
-          <div class="chart-project-row" data-chart-detail="${projectIndex}">
-            <span>${index + 1}</span>
-            <strong title="${escapeHtml(project.name)}">${escapeHtml(compactSentence(project.name, 64))}</strong>
-            <em>${formatNumber(plan)} tỷ</em>
-            <button type="button">Mở</button>
-          </div>
-        `;
-      }).join("")}
+  els.budgetSummary.innerHTML = top.length ? `
+    <div class="capital-summary-grid">
+      <div class="capital-summary-metric">
+        <span>Kế hoạch vốn top ${top.length}</span>
+        <strong>${formatNumber(totalPlannedTop)} <small>tỷ đồng</small></strong>
+      </div>
+      <div class="capital-summary-metric is-disbursed">
+        <span>Giải ngân ước tính</span>
+        <strong>${formatNumber(totalDisbursedTop)} <small>tỷ đồng</small></strong>
+        <em>${formatNumber(averageDisbursementRate)}% kế hoạch</em>
+      </div>
     </div>
-    <div class="chart-note"><strong>Dự án dẫn đầu:</strong> ${escapeHtml(leadProject ? compactSentence(leadProject.name, 76) : "Đang cập nhật")}</div>
+    <button class="capital-lead-project" data-chart-detail="${state.projects.indexOf(leadProject)}" type="button">
+      <span>Dự án có kế hoạch vốn lớn nhất</span>
+      <strong>${escapeHtml(compactSentence(leadProject.name, 88))}</strong>
+      <em>${formatNumber(toNumber(leadProject.plan))} tỷ đồng · Mở chi tiết →</em>
+    </button>
+  ` : `
+    <div class="capital-summary-empty">
+      <strong>Chưa có danh sách vốn để tổng hợp</strong>
+      <span>Dữ liệu sẽ tự động xuất hiện sau khi nhập file nguồn.</span>
+    </div>
   `;
 
-  els.budgetSummary.querySelectorAll("[data-chart-detail]").forEach((row) => {
-    row.addEventListener("click", () => openProjectDetail(Number(row.dataset.chartDetail)));
+  els.budgetSummary.querySelector("[data-chart-detail]")?.addEventListener("click", (event) => {
+    openProjectDetail(Number(event.currentTarget.dataset.chartDetail));
   });
 }

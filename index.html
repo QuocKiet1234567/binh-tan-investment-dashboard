@@ -14,7 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=20260622-2">
 </head>
 <body>
   <section id="loginScreen" class="login-screen">
@@ -151,6 +151,15 @@
             </span>
             Danh mục dự án Master
           </button>
+          <button class="nav-item" data-view="electronicFormView">
+            <span class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M4 4h16v16H4z"></path>
+                <path d="M4 9h16M9 4v16M14 9v11"></path>
+              </svg>
+            </span>
+            Biểu mẫu điện tử
+          </button>
           <button class="nav-item" data-view="capitalView">
             <span class="icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -227,9 +236,9 @@
             <em>Đơn vị: tỷ đồng</em>
           </article>
           <article class="kpi-card">
-            <span>Giải ngân bình quân</span>
+            <span>Tổng kế hoạch vốn 2026</span>
             <strong id="kpiPlan">0</strong>
-            <em>Năm báo cáo</em>
+            <em>Đơn vị: tỷ đồng</em>
           </article>
           <article class="kpi-card danger">
             <span>Cảnh báo chậm tiến độ</span>
@@ -247,7 +256,7 @@
             <div class="chart-box"><canvas id="statusChart"></canvas></div>
             <div id="statusSummary" class="chart-summary"></div>
           </section>
-          <section class="panel">
+          <section class="panel capital-chart-panel">
             <div class="panel-head">
               <h2>Kế hoạch vốn và giải ngân</h2>
               <span>Top dự án theo kế hoạch vốn năm.</span>
@@ -685,12 +694,109 @@
         </div>
       </section>
 
+      <section id="electronicFormView" class="view sheet-view">
+        <div class="sheet-command">
+          <div>
+            <span>Biểu mẫu báo cáo trực tuyến</span>
+            <h2>Thông tin dự án đầu tư</h2>
+            <p>Nhập liệu theo dạng bảng tính, tự động lưu và đồng bộ về danh mục dự án.</p>
+          </div>
+          <div class="sheet-command-status">
+            <span id="formSaveState"><i></i> Đã sẵn sàng</span>
+            <strong id="formLastSaved">Chưa có thay đổi</strong>
+          </div>
+        </div>
+
+        <section class="sheet-editor-shell">
+          <div class="sheet-ribbon">
+            <div class="sheet-ribbon-group">
+              <span class="sheet-ribbon-label">Dữ liệu</span>
+              <button id="formImportProjectsBtn" type="button" title="Nạp danh mục dự án hiện tại">Nạp dự án</button>
+              <button id="formAddRowBtn" type="button" title="Thêm một dòng mới">＋ Dòng</button>
+              <button id="formDeleteRowBtn" type="button" title="Xóa dòng đang chọn">− Xóa dòng</button>
+            </div>
+            <div class="sheet-ribbon-group">
+              <span class="sheet-ribbon-label">Định dạng</span>
+              <button class="sheet-format-btn" data-format="bold" type="button"><b>B</b></button>
+              <button class="sheet-format-btn" data-format="align-left" type="button">≡</button>
+              <button class="sheet-format-btn" data-format="align-center" type="button">☰</button>
+              <button class="sheet-format-btn" data-format="wrap" type="button">↵</button>
+            </div>
+            <div class="sheet-ribbon-group sheet-ribbon-actions">
+              <button id="formSaveBtn" class="sheet-save-btn" type="button">Lưu biểu mẫu</button>
+              <button id="formSyncProjectsBtn" type="button">Đồng bộ danh mục</button>
+              <button id="formExportBtn" type="button">Xuất Excel</button>
+            </div>
+          </div>
+
+          <div class="sheet-formula-bar">
+            <strong id="formCellAddress">A1</strong>
+            <span>fx</span>
+            <input id="formCellValue" type="text" placeholder="Chọn một ô để xem hoặc sửa nội dung">
+          </div>
+
+          <div class="sheet-document-meta">
+            <label>Tên đơn vị / chủ đầu tư<input id="formInvestor" type="text" placeholder="Ban Quản lý Dự án Phường Bình Tân"></label>
+            <label>Kỳ báo cáo<input id="formPeriod" type="text" placeholder="Quý II, năm 2026"></label>
+            <label>Người lập biểu<input id="formPreparedBy" type="text" placeholder="Họ và tên"></label>
+            <label>Ngày cập nhật<input id="formReportDate" type="date"></label>
+          </div>
+
+          <div class="sheet-grid-wrap">
+            <table id="electronicFormTable" class="electronic-sheet">
+              <thead>
+                <tr class="sheet-title-row">
+                  <th class="sheet-corner"></th>
+                  <th colspan="15">
+                    <strong>THÔNG TIN DỰ ÁN ĐẦU TƯ</strong>
+                    <span id="formPeriodPreview">Kỳ báo cáo đang cập nhật</span>
+                  </th>
+                </tr>
+                <tr class="sheet-group-row">
+                  <th></th>
+                  <th rowspan="2">STT</th>
+                  <th rowspan="2">Tên dự án</th>
+                  <th colspan="4">Quyết định chủ trương đầu tư</th>
+                  <th colspan="4">Giấy chứng nhận đăng ký đầu tư</th>
+                  <th rowspan="2">Mục tiêu</th>
+                  <th rowspan="2">KCN / KKT</th>
+                  <th rowspan="2">Tổng mức đầu tư</th>
+                  <th rowspan="2">Tiến độ</th>
+                  <th rowspan="2">Ghi chú</th>
+                </tr>
+                <tr class="sheet-column-row">
+                  <th></th>
+                  <th>Số QĐ</th>
+                  <th>QĐ điều chỉnh</th>
+                  <th>Ngày cấp</th>
+                  <th>Cơ quan cấp</th>
+                  <th>Số GCN</th>
+                  <th>Lần cấp</th>
+                  <th>Ngày cấp</th>
+                  <th>Cơ quan cấp</th>
+                </tr>
+              </thead>
+              <tbody id="electronicFormRows"></tbody>
+            </table>
+          </div>
+
+          <div class="sheet-footer">
+            <span><b>Mẹo:</b> Có thể copy nhiều dòng từ Excel rồi dán vào ô đầu tiên.</span>
+            <span id="formRowSummary">0 dòng dữ liệu</span>
+          </div>
+        </section>
+      </section>
+
       <section id="settingsView" class="view">
         <div class="settings-command">
           <div>
             <span>Quản trị hệ thống</span>
             <h2>Trung tâm dữ liệu và sao lưu</h2>
             <p>Theo dõi đồng bộ Supabase, quản lý file nguồn và bảo vệ dữ liệu báo cáo.</p>
+            <div class="settings-command-meta">
+              <span><i></i> Hệ thống quản trị dữ liệu tập trung</span>
+              <span>Supabase · Storage · Nhật ký thay đổi</span>
+            </div>
           </div>
           <div class="settings-command-actions">
             <button id="settingsTestConnectionBtn" class="secondary-btn" type="button">Kiểm tra kết nối</button>
@@ -699,25 +805,45 @@
         </div>
 
         <div class="settings-overview">
-          <article>
-            <span>Dự án đang quản lý</span>
-            <strong id="settingProjectCount">0</strong>
-            <em>Hồ sơ dự án</em>
+          <article class="is-projects">
+            <div class="settings-overview-icon">
+              <svg viewBox="0 0 24 24"><path d="M4 5h16v15H4z"></path><path d="M8 5V3h8v2M8 10h8M8 14h5"></path></svg>
+            </div>
+            <div>
+              <span>Dự án đang quản lý</span>
+              <strong id="settingProjectCount">0</strong>
+              <em>Hồ sơ dự án</em>
+            </div>
           </article>
-          <article>
-            <span>File nguồn đã lưu</span>
-            <strong id="settingFileCount">0</strong>
-            <em id="settingFileSize">0 MB</em>
+          <article class="is-files">
+            <div class="settings-overview-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 7h18v13H3z"></path><path d="m3 7 4-4h5l3 4"></path></svg>
+            </div>
+            <div>
+              <span>File nguồn đã lưu</span>
+              <strong id="settingFileCount">0</strong>
+              <em id="settingFileSize">0 MB</em>
+            </div>
           </article>
-          <article>
-            <span>Lịch sử nhập liệu</span>
-            <strong id="settingImportCount">0</strong>
-            <em>Nguồn dữ liệu</em>
+          <article class="is-imports">
+            <div class="settings-overview-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="m8 11 4 4 4-4M4 19h16"></path></svg>
+            </div>
+            <div>
+              <span>Lịch sử nhập liệu</span>
+              <strong id="settingImportCount">0</strong>
+              <em>Nguồn dữ liệu</em>
+            </div>
           </article>
-          <article>
-            <span>Nhật ký cập nhật</span>
-            <strong id="settingAuditCount">0</strong>
-            <em>Thao tác được ghi nhận</em>
+          <article class="is-audit">
+            <div class="settings-overview-icon">
+              <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"></path><path d="M9 8h6M9 12h6M9 16h4"></path></svg>
+            </div>
+            <div>
+              <span>Nhật ký cập nhật</span>
+              <strong id="settingAuditCount">0</strong>
+              <em>Thao tác được ghi nhận</em>
+            </div>
           </article>
         </div>
 
@@ -780,6 +906,13 @@
                 </div>
               </div>
               <p class="settings-tool-copy">Tải bản sao đầy đủ gồm dự án, cấu hình báo cáo, lịch sử nhập liệu và nhật ký cập nhật.</p>
+              <div class="settings-protection-note">
+                <span class="settings-protection-icon">✓</span>
+                <div>
+                  <strong>Bản sao độc lập, dễ phục hồi</strong>
+                  <p>Nên tải bản sao trước mỗi đợt nhập dữ liệu lớn hoặc điều chỉnh hàng loạt.</p>
+                </div>
+              </div>
               <div class="settings-tool-actions">
                 <button id="settingsBackupBtn" class="primary-btn" type="button">Tải bản sao JSON</button>
                 <input id="settingsRestoreInput" type="file" accept=".json,application/json" hidden>
@@ -817,6 +950,7 @@
     </main>
   </div>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20260622-2"></script>
+  <script src="./electronic-form.js?v=20260618-1"></script>
 </body>
 </html>
