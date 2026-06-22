@@ -1064,6 +1064,10 @@ textarea:focus {
   align-items: stretch;
 }
 
+.chart-grid + .panel {
+  margin-top: 28px;
+}
+
 .panel {
   padding: 16px;
 }
@@ -1108,12 +1112,34 @@ textarea:focus {
   font-weight: 700;
 }
 
+.chart-grid .panel-head {
+  min-height: 42px;
+  margin-bottom: 14px;
+  align-items: flex-start;
+}
+
+.chart-grid .panel-head h2 {
+  line-height: 1.35;
+}
+
+.chart-grid .panel-head span {
+  max-width: 240px;
+  line-height: 1.45;
+  text-align: right;
+}
+
 .chart-box {
   height: 300px;
 }
 
-.chart-grid .panel:nth-child(2) .chart-box {
-  height: 300px;
+.chart-grid .chart-box {
+  height: 344px;
+  padding: 8px;
+  border: 1px solid #edf2f8;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, .08), transparent 36%),
+    #ffffff;
 }
 
 .capital-chart-panel {
@@ -1134,13 +1160,6 @@ textarea:focus {
 
 .capital-chart-panel .chart-box {
   height: 344px !important;
-  margin: 0 -2px;
-  padding: 8px 8px 4px 2px;
-  border: 1px solid #edf2f8;
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, .09), transparent 36%),
-    #ffffff;
 }
 
 .chart-summary {
@@ -4777,7 +4796,11 @@ textarea:focus {
     width: max-content;
   }
 
-  .capital-chart-panel .panel-head span {
+  .chart-grid .panel-head {
+    min-height: 0;
+  }
+
+  .chart-grid .panel-head span {
     max-width: none;
     text-align: left;
   }
