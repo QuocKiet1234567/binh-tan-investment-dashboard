@@ -5005,7 +5005,7 @@ function renderCharts() {
         legend: {
           display: top.length > 0,
           position: "top",
-          align: "start",
+          align: "end",
           labels: {
             boxWidth: 9,
             boxHeight: 9,
