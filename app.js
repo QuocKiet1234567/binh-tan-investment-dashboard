@@ -59,10 +59,12 @@ const demoProjects = [
 ];
 
 const els = {};
+const SIDEBAR_STATE_KEY = "bt_sidebar_collapsed";
 
 document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
   normalizeStaticLabels();
+  restoreSidebarState();
   bindEvents();
   await initSupabase();
 
@@ -77,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function cacheElements() {
   [
-    "loginScreen", "appShell", "loginForm", "loginUser", "loginPass", "rememberMe",
+    "loginScreen", "appShell", "sidebarToggle", "loginForm", "loginUser", "loginPass", "rememberMe",
     "loginError", "logoutBtn", "pageTitle", "pageSub", "searchInput", "sourceSummary",
     "kpiProjects", "kpiBudget", "kpiPlan", "kpiAlerts", "statusSummary", "budgetSummary", "alertList", "fileInput",
     "chooseFileBtn", "dropZone", "analysisStatus", "analysisLog", "previewRows",
@@ -112,8 +114,18 @@ function normalizeStaticLabels() {
     const icon = projectsNav.querySelector(".icon");
     projectsNav.textContent = "";
     if (icon) projectsNav.append(icon);
-    projectsNav.append(document.createTextNode("Danh mục dự án"));
+    const label = document.createElement("span");
+    label.className = "nav-label";
+    label.textContent = "Danh mục dự án";
+    projectsNav.append(label);
   }
+
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    const label = item.querySelector(".nav-label")?.textContent?.trim();
+    if (!label) return;
+    item.dataset.label = label;
+    item.setAttribute("aria-label", label);
+  });
 
   const progressPane = document.getElementById("progressPane");
   const progressLeft = progressPane?.querySelector(".progress-layout > div:first-child");
@@ -138,6 +150,7 @@ function normalizeStaticLabels() {
 }
 
 function bindEvents() {
+  els.sidebarToggle?.addEventListener("click", toggleSidebar);
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", handleLogout);
   els.chooseFileBtn.addEventListener("click", () => {
@@ -235,6 +248,32 @@ function bindEvents() {
     els.fileInput.value = "";
     handleFiles([...event.dataTransfer.files]);
   });
+}
+
+function restoreSidebarState() {
+  if (!els.appShell || window.matchMedia("(max-width: 1040px)").matches) return;
+  const collapsed = localStorage.getItem(SIDEBAR_STATE_KEY) === "1";
+  setSidebarCollapsed(collapsed, false);
+}
+
+function toggleSidebar() {
+  if (!els.appShell || window.matchMedia("(max-width: 1040px)").matches) return;
+  setSidebarCollapsed(!els.appShell.classList.contains("sidebar-collapsed"));
+}
+
+function setSidebarCollapsed(collapsed, persist = true) {
+  els.appShell?.classList.toggle("sidebar-collapsed", collapsed);
+  if (els.sidebarToggle) {
+    const action = collapsed ? "Mở rộng" : "Thu gọn";
+    els.sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+    els.sidebarToggle.setAttribute("aria-label", `${action} thanh điều hướng`);
+    els.sidebarToggle.title = `${action} thanh điều hướng`;
+  }
+  if (persist) localStorage.setItem(SIDEBAR_STATE_KEY, collapsed ? "1" : "0");
+  window.setTimeout(() => {
+    state.charts.status?.resize();
+    state.charts.budget?.resize();
+  }, 260);
 }
 
 function handleLogin(event) {
