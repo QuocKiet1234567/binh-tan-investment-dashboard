@@ -267,7 +267,7 @@ function setSidebarCollapsed(collapsed, persist = true) {
     const action = collapsed ? "Mở rộng" : "Thu gọn";
     els.sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
     els.sidebarToggle.setAttribute("aria-label", `${action} thanh điều hướng`);
-    els.sidebarToggle.title = `${action} thanh điều hướng`;
+    els.sidebarToggle.removeAttribute("title");
   }
   if (persist) localStorage.setItem(SIDEBAR_STATE_KEY, collapsed ? "1" : "0");
   window.setTimeout(() => {
