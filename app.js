@@ -4910,19 +4910,19 @@ function renderCharts() {
     id: "capitalValuePlugin",
     afterDatasetsDraw(chart) {
       if (!top.length || !chart.chartArea) return;
-      const { ctx, chartArea } = chart;
-      const bars = chart.getDatasetMeta(0)?.data || [];
+      const { ctx } = chart;
       ctx.save();
       ctx.textBaseline = "middle";
-      ctx.font = "800 10px Inter, system-ui, sans-serif";
-      bars.forEach((bar, index) => {
-        if (!bar || !budgetValues[index]) return;
-        const valueLabel = `${formatNumber(budgetValues[index])} tỷ`;
-        const roomOutside = chartArea.right - bar.x;
-        const drawInside = roomOutside < 58;
-        ctx.textAlign = drawInside ? "right" : "left";
-        ctx.fillStyle = drawInside ? "#ffffff" : "#1e3a8a";
-        ctx.fillText(valueLabel, drawInside ? bar.x - 5 : bar.x + 6, bar.y);
+      ctx.textAlign = "left";
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const bars = chart.getDatasetMeta(datasetIndex)?.data || [];
+        const values = datasetIndex === 0 ? budgetValues : plannedValues;
+        ctx.font = `${datasetIndex === 0 ? "800" : "700"} 10px Inter, system-ui, sans-serif`;
+        ctx.fillStyle = datasetIndex === 0 ? "#1e3a8a" : "#2563eb";
+        bars.forEach((bar, index) => {
+          if (!bar || !values[index]) return;
+          ctx.fillText(`${formatNumber(values[index])} tỷ`, bar.x + 6, bar.y);
+        });
       });
       ctx.restore();
     }
@@ -4978,6 +4978,7 @@ function renderCharts() {
         borderWidth: 0,
         borderRadius: 7,
         borderSkipped: false,
+        minBarLength: 3,
         maxBarThickness: 15
       }, {
         label: "Kế hoạch vốn",
@@ -4987,6 +4988,7 @@ function renderCharts() {
         borderWidth: 0,
         borderRadius: 7,
         borderSkipped: false,
+        minBarLength: 8,
         maxBarThickness: 15
       }]
     },
@@ -5032,12 +5034,12 @@ function renderCharts() {
           }
         }
       },
-      layout: { padding: { top: 2, right: 44, bottom: 4 } },
+      layout: { padding: { top: 2, right: 82, bottom: 4 } },
       scales: {
         x: {
           display: top.length > 0,
           beginAtZero: true,
-          grace: "12%",
+          grace: "20%",
           grid: { color: "rgba(148, 163, 184, .18)", drawBorder: false },
           border: { display: false },
           ticks: {
@@ -5053,6 +5055,7 @@ function renderCharts() {
           ticks: {
             color: "#334155",
             autoSkip: false,
+            crossAlign: "far",
             font: { size: 10, weight: "700" },
             padding: 8
           }
