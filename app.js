@@ -4852,9 +4852,8 @@ function renderCharts() {
     .filter((project) => toNumber(project.plan) > 0)
     .sort((a, b) => toNumber(b.plan) - toNumber(a.plan))
     .slice(0, 6);
+  const budgetValues = top.map((project) => toNumber(project.budget));
   const plannedValues = top.map((project) => toNumber(project.plan));
-  const disbursementRates = top.map((project) => deriveDisbursementRate(project));
-  const disbursedValues = top.map((project, index) => plannedValues[index] * disbursementRates[index] / 100);
 
   const centerTextPlugin = {
     id: "centerTextPlugin",
@@ -4896,23 +4895,23 @@ function renderCharts() {
     }
   };
 
-  const disbursementRatePlugin = {
-    id: "disbursementRatePlugin",
+  const capitalValuePlugin = {
+    id: "capitalValuePlugin",
     afterDatasetsDraw(chart) {
       if (!top.length || !chart.chartArea) return;
       const { ctx, chartArea } = chart;
-      const bars = chart.getDatasetMeta(1)?.data || [];
+      const bars = chart.getDatasetMeta(0)?.data || [];
       ctx.save();
       ctx.textBaseline = "middle";
       ctx.font = "800 10px Inter, system-ui, sans-serif";
       bars.forEach((bar, index) => {
-        if (!bar || !disbursedValues[index]) return;
-        const rateLabel = `${formatNumber(disbursementRates[index])}%`;
+        if (!bar || !budgetValues[index]) return;
+        const valueLabel = `${formatNumber(budgetValues[index])} tỷ`;
         const roomOutside = chartArea.right - bar.x;
-        const drawInside = roomOutside < 38;
+        const drawInside = roomOutside < 58;
         ctx.textAlign = drawInside ? "right" : "left";
         ctx.fillStyle = drawInside ? "#ffffff" : "#1e3a8a";
-        ctx.fillText(rateLabel, drawInside ? bar.x - 5 : bar.x + 6, bar.y);
+        ctx.fillText(valueLabel, drawInside ? bar.x - 5 : bar.x + 6, bar.y);
       });
       ctx.restore();
     }
@@ -4961,8 +4960,8 @@ function renderCharts() {
     data: {
       labels: top.map((project) => compactSentence(project.name, 34)),
       datasets: [{
-        label: "Kế hoạch vốn",
-        data: plannedValues,
+        label: "Tổng mức đầu tư",
+        data: budgetValues,
         backgroundColor: "#1e3a8a",
         borderColor: "#172554",
         borderWidth: 0,
@@ -4970,8 +4969,8 @@ function renderCharts() {
         borderSkipped: false,
         maxBarThickness: 15
       }, {
-        label: "Giải ngân ước tính",
-        data: disbursedValues,
+        label: "Kế hoạch vốn",
+        data: plannedValues,
         backgroundColor: "#60a5fa",
         borderColor: "#3b82f6",
         borderWidth: 0,
@@ -5015,7 +5014,8 @@ function renderCharts() {
             label: (item) => ` ${item.dataset.label}: ${formatNumber(item.raw)} tỷ đồng`,
             afterBody: (items) => {
               const index = items[0]?.dataIndex;
-              return index == null ? "" : `Tỷ lệ giải ngân ước tính: ${formatNumber(disbursementRates[index])}%`;
+              if (index == null || !budgetValues[index]) return "";
+              return `Kế hoạch vốn / tổng mức đầu tư: ${formatNumber(plannedValues[index] / budgetValues[index] * 100)}%`;
             },
             footer: () => "Bấm thanh để mở chi tiết dự án"
           }
@@ -5048,7 +5048,7 @@ function renderCharts() {
         }
       }
     },
-    plugins: [disbursementRatePlugin, emptyCapitalChartPlugin]
+    plugins: [capitalValuePlugin, emptyCapitalChartPlugin]
   });
 
   els.statusSummary.innerHTML = statusBuckets.map((item) => {
@@ -5064,20 +5064,20 @@ function renderCharts() {
     `;
   }).join("");
 
+  const totalBudgetTop = budgetValues.reduce((sum, value) => sum + value, 0);
   const totalPlannedTop = plannedValues.reduce((sum, value) => sum + value, 0);
-  const totalDisbursedTop = disbursedValues.reduce((sum, value) => sum + value, 0);
-  const averageDisbursementRate = totalPlannedTop ? totalDisbursedTop / totalPlannedTop * 100 : 0;
+  const planToBudgetRate = totalBudgetTop ? totalPlannedTop / totalBudgetTop * 100 : 0;
   const leadProject = top[0];
   els.budgetSummary.innerHTML = top.length ? `
     <div class="capital-summary-grid">
       <div class="capital-summary-metric">
-        <span>Kế hoạch vốn top ${top.length}</span>
-        <strong>${formatNumber(totalPlannedTop)} <small>tỷ đồng</small></strong>
+        <span>Tổng mức đầu tư top ${top.length}</span>
+        <strong>${formatNumber(totalBudgetTop)} <small>tỷ đồng</small></strong>
       </div>
       <div class="capital-summary-metric is-disbursed">
-        <span>Giải ngân ước tính</span>
-        <strong>${formatNumber(totalDisbursedTop)} <small>tỷ đồng</small></strong>
-        <em>${formatNumber(averageDisbursementRate)}% kế hoạch</em>
+        <span>Kế hoạch vốn top ${top.length}</span>
+        <strong>${formatNumber(totalPlannedTop)} <small>tỷ đồng</small></strong>
+        <em>${formatNumber(planToBudgetRate)}% tổng mức đầu tư</em>
       </div>
     </div>
     <button class="capital-lead-project" data-chart-detail="${state.projects.indexOf(leadProject)}" type="button">
