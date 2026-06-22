@@ -2458,32 +2458,6 @@ async function handleProjectAssetDelete(event) {
 
 let pendingProjectAssetSlot = null;
 
-function normalizeStaticLabels() {
-  const projectsNav = document.querySelector('.nav-item[data-view="projectsView"]');
-  if (projectsNav) {
-    const icon = projectsNav.querySelector(".icon");
-    projectsNav.textContent = "";
-    if (icon) projectsNav.append(icon);
-    projectsNav.append(document.createTextNode("Danh mục dự án"));
-  }
-
-  const progressPane = document.getElementById("progressPane");
-  const photoGrid = progressPane?.querySelector(".site-photos");
-  if (photoGrid && !photoGrid.id) {
-    photoGrid.id = "detailPhotoGrid";
-  }
-
-  if (progressPane && !document.getElementById("detailPhotoInput")) {
-    const input = document.createElement("input");
-    input.id = "detailPhotoInput";
-    input.type = "file";
-    input.multiple = true;
-    input.accept = "image/*";
-    input.hidden = true;
-    progressPane.append(input);
-  }
-}
-
 function getProjectDocumentSlots(project) {
   return [
     {
