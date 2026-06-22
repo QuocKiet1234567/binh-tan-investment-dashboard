@@ -1162,6 +1162,46 @@ textarea:focus {
   height: 344px !important;
 }
 
+.capital-chart-box {
+  position: relative;
+}
+
+.capital-chart-legend {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.capital-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.capital-chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.capital-chart-legend .is-budget {
+  background: #1e3a8a;
+}
+
+.capital-chart-legend .is-plan {
+  background: #60a5fa;
+}
+
 .chart-summary {
   margin-top: 14px;
   display: grid;

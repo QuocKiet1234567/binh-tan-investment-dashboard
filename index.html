@@ -266,7 +266,13 @@
               <h2>Tổng mức đầu tư và kế hoạch vốn</h2>
               <span>So sánh top dự án theo kế hoạch vốn năm.</span>
             </div>
-            <div class="chart-box"><canvas id="budgetChart"></canvas></div>
+            <div class="chart-box capital-chart-box">
+              <div class="capital-chart-legend" aria-label="Chú giải biểu đồ">
+                <span><i class="is-budget"></i>Tổng mức đầu tư</span>
+                <span><i class="is-plan"></i>Kế hoạch vốn</span>
+              </div>
+              <canvas id="budgetChart"></canvas>
+            </div>
             <div id="budgetSummary" class="chart-summary"></div>
           </section>
         </div>

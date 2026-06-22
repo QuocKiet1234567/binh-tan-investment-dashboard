@@ -5003,18 +5003,7 @@ function renderCharts() {
       },
       plugins: {
         legend: {
-          display: top.length > 0,
-          position: "top",
-          align: "end",
-          labels: {
-            boxWidth: 9,
-            boxHeight: 9,
-            usePointStyle: true,
-            pointStyle: "rectRounded",
-            padding: 18,
-            color: "#475569",
-            font: { size: 11, weight: "700" }
-          }
+          display: false
         },
         emptyCapitalChartPlugin: { show: !top.length },
         tooltip: {
@@ -5034,7 +5023,7 @@ function renderCharts() {
           }
         }
       },
-      layout: { padding: { top: 2, right: 82, bottom: 4 } },
+      layout: { padding: { top: 34, right: 82, bottom: 4 } },
       scales: {
         x: {
           display: top.length > 0,
