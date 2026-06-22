@@ -883,11 +883,10 @@ function openProjectDetail(index) {
 function renderProjectDetail(project) {
   const index = state.projects.indexOf(project);
   const group = deriveProjectGroup(project);
-  const disbRate = deriveDisbursementRate(project);
   const progressRate = deriveProjectRate(project);
   const plan = toNumber(project.plan);
-  const disbursed = plan * disbRate / 100;
-  const remaining = Math.max(0, plan - disbursed);
+  const budget = toNumber(project.budget);
+  const allocationRate = budget > 0 ? plan / budget * 100 : 0;
 
   els.detailCode.textContent = `DA-2026-${String(index + 1).padStart(3, "0")}`;
   els.detailGroup.textContent = `Nhóm ${group}`;
@@ -899,9 +898,9 @@ function renderProjectDetail(project) {
   els.detailLegal.textContent = project.legal || "Đang cập nhật hồ sơ pháp lý.";
   els.detailProgressDoc.textContent = project.progress || "Đang cập nhật tiến độ hồ sơ.";
   els.detailPlan.textContent = `${formatNumber(plan * 1_000_000_000)} VNĐ`;
-  els.detailDisbursed.textContent = `${formatNumber(disbursed * 1_000_000_000)} VNĐ`;
-  els.detailDisbRate.textContent = `Tỷ lệ: ${disbRate}%`;
-  els.detailRemaining.textContent = `${formatNumber(remaining * 1_000_000_000)} VNĐ`;
+  els.detailDisbursed.textContent = `${formatNumber(budget * 1_000_000_000)} VNĐ`;
+  els.detailDisbRate.textContent = "Kế hoạch vốn / tổng mức đầu tư";
+  els.detailRemaining.textContent = `${formatNumber(allocationRate)}%`;
   els.detailContractValue.textContent = `${formatNumber(project.budget * 0.78)} tỷ`;
   els.detailProgressRate.textContent = `${progressRate}%`;
   els.detailProgressBar.style.width = `${progressRate}%`;
@@ -4754,11 +4753,10 @@ function renderProjectDetail(project) {
 
   const safeIndex = Math.max(0, index);
   const group = deriveProjectGroup(project);
-  const disbRate = deriveDisbursementRate(project);
   const progressRate = deriveProjectRate(project);
   const plan = toNumber(project.plan);
-  const disbursed = plan * disbRate / 100;
-  const remaining = Math.max(0, plan - disbursed);
+  const budget = toNumber(project.budget);
+  const allocationRate = budget > 0 ? plan / budget * 100 : 0;
 
   els.detailCode.textContent = `DA-2026-${String(safeIndex + 1).padStart(3, "0")}`;
   els.detailGroup.textContent = `Nhóm ${group}`;
@@ -4770,9 +4768,9 @@ function renderProjectDetail(project) {
   els.detailLegal.textContent = project.legal || "Đang cập nhật hồ sơ pháp lý.";
   els.detailProgressDoc.textContent = project.progress || "Đang cập nhật tiến độ hồ sơ.";
   els.detailPlan.textContent = `${formatNumber(plan * 1_000_000_000)} VNĐ`;
-  els.detailDisbursed.textContent = `${formatNumber(disbursed * 1_000_000_000)} VNĐ`;
-  els.detailDisbRate.textContent = `Tỷ lệ: ${disbRate}%`;
-  els.detailRemaining.textContent = `${formatNumber(remaining * 1_000_000_000)} VNĐ`;
+  els.detailDisbursed.textContent = `${formatNumber(budget * 1_000_000_000)} VNĐ`;
+  els.detailDisbRate.textContent = "Kế hoạch vốn / tổng mức đầu tư";
+  els.detailRemaining.textContent = `${formatNumber(allocationRate)}%`;
   els.detailContractValue.textContent = `${formatNumber(project.budget * 0.78)} tỷ`;
   els.detailProgressRate.textContent = `${progressRate}%`;
   els.detailProgressBar.style.width = `${progressRate}%`;
