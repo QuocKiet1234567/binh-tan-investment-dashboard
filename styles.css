@@ -1060,6 +1060,10 @@ textarea:focus {
   align-items: start;
 }
 
+.chart-grid {
+  align-items: stretch;
+}
+
 .panel {
   padding: 16px;
 }
@@ -1144,6 +1148,11 @@ textarea:focus {
   display: grid;
   gap: 10px;
   align-content: start;
+}
+
+.capital-chart-panel .chart-summary {
+  margin-top: auto;
+  padding-top: 14px;
 }
 
 .chart-stat,

@@ -5075,22 +5075,8 @@ function renderCharts() {
     `;
   }).join("");
 
-  const totalBudgetTop = budgetValues.reduce((sum, value) => sum + value, 0);
-  const totalPlannedTop = plannedValues.reduce((sum, value) => sum + value, 0);
-  const planToBudgetRate = totalBudgetTop ? totalPlannedTop / totalBudgetTop * 100 : 0;
   const leadProject = top[0];
   els.budgetSummary.innerHTML = top.length ? `
-    <div class="capital-summary-grid">
-      <div class="capital-summary-metric">
-        <span>Tổng mức đầu tư top ${top.length}</span>
-        <strong>${formatNumber(totalBudgetTop)} <small>tỷ đồng</small></strong>
-      </div>
-      <div class="capital-summary-metric is-disbursed">
-        <span>Kế hoạch vốn top ${top.length}</span>
-        <strong>${formatNumber(totalPlannedTop)} <small>tỷ đồng</small></strong>
-        <em>${formatNumber(planToBudgetRate)}% tổng mức đầu tư</em>
-      </div>
-    </div>
     <button class="capital-lead-project" data-chart-detail="${state.projects.indexOf(leadProject)}" type="button">
       <span>Dự án có kế hoạch vốn lớn nhất</span>
       <strong>${escapeHtml(compactSentence(leadProject.name, 88))}</strong>
